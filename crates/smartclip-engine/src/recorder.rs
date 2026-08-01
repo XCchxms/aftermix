@@ -627,10 +627,20 @@ fn run(
         }
 
         if let Some((texture, _fresh)) = capture.next_texture(index)? {
-            // PTS sur la même horloge que l'audio. Daté à l'indice de frame,
-            // l'écart avec le QPC atteignait −33 ms et fluctuait avec la gigue
-            // du sommeil : une désynchronisation A/V bien réelle.
-            let pts = (hns_since_boot(clock.now().0, clock.frequency()) - segment_origin).max(0);
+            // Horodatage vidéo en **cadence constante**, dans le segment.
+            //
+            // Le dater au QPC paraissait plus juste — c'est l'horloge de
+            // l'audio — mais inscrit dans le fichier chaque hoquet de la
+            // boucle : un retard de deux secondes devient un trou de deux
+            // secondes, pendant lequel le lecteur fige l'image alors que le son
+            // continue. Mesuré sur un clip : jusqu'à 24 secondes sans une seule
+            // image, et 12 images par seconde en moyenne.
+            //
+            // En cadence constante, la vidéo reste fluide par construction. Le
+            // prix est une dérive lente vis-à-vis de l'audio : mesurée à −33 ms
+            // sur 5 minutes au Spike 3, sous le seuil audible de 40 ms, et sans
+            // commune mesure avec un trou de plusieurs secondes.
+            let pts = (index - segment_first_frame) as i64 * frame_duration;
 
             // Une écriture qui échoue ne doit pas tuer le buffer : un disque
             // momentanément saturé ou un encodeur qui hoquette se traduit par
