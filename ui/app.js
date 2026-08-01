@@ -1,0 +1,481 @@
+// SmartClip Studio — logique de la vue.
+//
+// Aucune règle métier ici : les indices de pistes, le filtrage des emplacements
+// vacants et le mixage viennent tous du moteur. Cette couche ne fait que
+// présenter et transmettre.
+
+import { Preview } from "./preview.js";
+
+const { invoke, convertFileSrc } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
+
+const el = (id) => document.getElementById(id);
+const state = { recording: false, clip: null, gains: new Map() };
+let preview;
+
+// ─────────────────────────────── utilitaires ───────────────────────────────
+
+let toastTimer;
+function toast(message, isError = false) {
+  const node = el("toast");
+  node.textContent = message;
+  node.classList.toggle("error", isError);
+  node.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => node.classList.remove("show"), 4000);
+}
+
+async function call(command, args) {
+  try {
+    return await invoke(command, args);
+  } catch (error) {
+    toast(String(error), true);
+    throw error;
+  }
+}
+
+const formatDuration = (seconds) => {
+  const total = Math.round(seconds);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+};
+
+const formatDate = (epoch) =>
+  new Date(epoch * 1000).toLocaleString("fr-FR", {
+    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+  });
+
+// ────────────────────────────── état du buffer ─────────────────────────────
+
+function renderStatus(tracks) {
+  el("status").classList.toggle("live", state.recording);
+  el("statusText").textContent = state.recording
+    ? `Enregistre — ${tracks.filter((t) => !t.startsWith("(libre")).join(", ")}`
+    : "Buffer arrêté";
+  el("toggle").textContent = state.recording ? "Arrêter" : "Démarrer le buffer";
+  el("save").disabled = !state.recording;
+}
+
+async function toggleRecording() {
+  const button = el("toggle");
+  button.disabled = true;
+  try {
+    if (state.recording) {
+      await call("stop_recording");
+      state.recording = false;
+      renderStatus([]);
+    } else {
+      // Le démarrage ouvre la capture et découvre les sources : compter
+      // quelques centaines de millisecondes, d'où le bouton désactivé.
+      const tracks = await call("start_recording");
+      state.recording = true;
+      renderStatus(tracks);
+      toast("Buffer démarré — les dernières secondes sont désormais récupérables");
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function saveClip() {
+  const button = el("save");
+  button.disabled = true;
+  // Une sauvegarde n'est pas instantanée : ~1,3 s pour une minute de buffer,
+  // ~4 s pour cinq. Sans retour visuel, l'utilisateur croirait à un blocage et
+  // insisterait sur le bouton.
+  const previous = button.textContent;
+  button.textContent = "Sauvegarde…";
+  el("status").classList.add("saving");
+  try {
+    const outcome = await call("save_clip");
+    toast(`Clip de ${formatDuration(outcome.seconds)} sauvegardé en ${Math.round(outcome.total_ms)} ms`);
+    await loadLibrary();
+  } finally {
+    button.textContent = previous;
+    el("status").classList.remove("saving");
+    button.disabled = !state.recording;
+  }
+}
+
+// ─────────────────────────────── bibliothèque ──────────────────────────────
+
+async function loadLibrary() {
+  const clips = await call("list_clips");
+  const grid = el("grid");
+  grid.innerHTML = "";
+  el("empty").classList.toggle("hidden", clips.length > 0);
+
+  for (const clip of clips) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.onclick = () => openEditor(clip);
+
+    // Pas d'aperçu vidéo dans les cartes.
+    //
+    // Chaque élément <video> garde le fichier ouvert et mobilise un décodeur ;
+    // les cumuler dégradait la lecture dans l'éditeur. Le confort qu'ils
+    // apportaient ne vaut pas ce risque tant que la lecture n'est pas
+    // parfaitement fiable. À reconsidérer plus tard, avec de vraies vignettes
+    // extraites une fois pour toutes plutôt que des lecteurs vivants.
+    const title = document.createElement("h3");
+    title.textContent = clip.name;
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent =
+      `${formatDuration(clip.seconds)} · ${clip.megabytes.toFixed(0)} Mo · ${formatDate(clip.created)}`;
+
+    const chips = document.createElement("div");
+    chips.className = "chips";
+    for (const track of clip.tracks) {
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = track.label;
+      chips.appendChild(chip);
+    }
+
+    card.append(title, meta, chips);
+    grid.appendChild(card);
+  }
+}
+
+// ──────────────────────────────── éditeur ──────────────────────────────────
+
+async function openEditor(clip) {
+  state.clip = clip;
+  state.gains = new Map(clip.tracks.map((t) => [t.index, 1]));
+
+  el("libraryView").classList.add("hidden");
+  el("editorView").classList.remove("hidden");
+  el("back").classList.remove("hidden");
+  el("clipName").textContent = clip.name;
+  el("player").src = convertFileSrc(clip.path);
+
+  const container = el("tracks");
+  container.innerHTML = "";
+
+  if (clip.tracks.length === 0) {
+    const note = document.createElement("div");
+    note.className = "hint";
+    note.textContent = "Ce clip n'a pas de métadonnées : ses pistes ne peuvent pas être nommées.";
+    container.appendChild(note);
+    return;
+  }
+
+  trackRows.clear();
+  for (const track of clip.tracks) {
+    const row = buildTrack(track);
+    trackRows.set(track.index, row);
+    container.appendChild(row);
+  }
+
+  // L'extraction des pistes prend le temps de décoder l'audio : l'éditeur
+  // s'affiche tout de suite et l'écoute s'active quand elle est prête.
+  el("previewState").textContent = "Préparation de l'écoute…";
+  try {
+    const tracks = await invoke("prepare_preview", { source: clip.path });
+    if (tracks.length === 0) throw new Error("aucune piste exploitable dans ce clip");
+    await preview.load(tracks, convertFileSrc);
+    for (const [index, gain] of state.gains) preview.setGain(index, gain);
+    // Une piste vide n'est pas une panne : l'application était ouverte mais ne
+    // jouait rien. Le dire évite de chercher un défaut là où il n'y en a pas.
+    const silent = new Set(preview.silentTracks());
+    for (const [index, row] of trackRows) {
+      if (silent.has(index)) markSilent(row);
+    }
+    const audible = tracks.length - silent.size;
+    el("previewState").textContent =
+      silent.size > 0
+        ? `Écoute en direct — ${audible} piste(s) avec du son, ${silent.size} silencieuse(s)`
+        : `Écoute en direct sur ${tracks.length} piste(s) — bouge un fader pendant la lecture`;
+    el("previewState").classList.remove("warn");
+
+    // Doublons de signal : Discord réémet souvent le micro. Sans avertissement,
+    // l'utilisateur s'entend en double sans comprendre pourquoi.
+    for (const pair of preview.duplicatePairs()) {
+      const nameOf = (i) => clip.tracks.find((t) => t.index === i)?.label ?? `piste ${i}`;
+      for (const index of [pair.a, pair.b]) {
+        const row = trackRows.get(index);
+        if (row) row.classList.add("duplicate");
+      }
+      toast(
+        `« ${nameOf(pair.a)} » et « ${nameOf(pair.b)} » contiennent le même son — ` +
+          `cumuler les deux le fera entendre en double. Coupe l'une des deux.`,
+        true,
+      );
+    }
+    if (!el("player").paused) preview.start();
+  } catch (error) {
+    // Sans écoute en direct, l'éditeur reste utilisable : les faders agissent
+    // toujours à l'export. Mais il faut le dire, et fort.
+    //
+    // Cet échec était auparavant journalisé dans une console invisible : la
+    // vidéo restait non-muette et jouait sa piste par défaut, les faders
+    // pilotaient un mixeur vide, et rien n'expliquait pourquoi.
+    el("player").muted = false;
+    el("previewState").textContent =
+      "⚠ Écoute en direct indisponible — les réglages s'appliqueront quand même à l'export";
+    el("previewState").classList.add("warn");
+    toast(`Écoute en direct impossible : ${error}`, true);
+  }
+}
+
+/// Lignes de piste affichées, indexées par numéro de piste dans le fichier.
+const trackRows = new Map();
+
+/// Signale qu'une piste ne contient aucun son.
+function markSilent(row) {
+  row.classList.add("silent");
+  const value = row.querySelector(".value");
+  if (value) value.textContent = "aucun son";
+}
+
+function buildTrack(track) {
+  const row = document.createElement("div");
+  row.className = "track";
+
+  const head = document.createElement("div");
+  head.className = "track-head";
+
+  const mute = document.createElement("button");
+  mute.className = "mute";
+  mute.textContent = "♪";
+  mute.title = "Couper cette piste";
+
+  const label = document.createElement("span");
+  label.textContent = track.label;
+
+  const value = document.createElement("span");
+  value.className = "value";
+  value.textContent = "100 %";
+
+  head.append(mute, label, value);
+
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = "0";
+  // Jusqu'à 200 % : une piste enregistrée trop bas doit pouvoir être remontée,
+  // c'est précisément le cas d'usage du micro trop faible.
+  slider.max = "200";
+  slider.value = "100";
+
+  let muted = false;
+  const apply = () => {
+    const gain = muted ? 0 : Number(slider.value) / 100;
+    state.gains.set(track.index, gain);
+    // Le gain part immédiatement vers l'écoute : c'est ce qui rend le réglage
+    // audible pendant qu'on le fait, au lieu d'exiger un export pour juger.
+    preview.setGain(track.index, gain);
+    value.textContent = muted ? "coupée" : `${slider.value} %`;
+    row.classList.toggle("muted", muted);
+  };
+
+  slider.oninput = () => { muted = false; mute.classList.remove("on"); apply(); };
+  mute.onclick = () => { muted = !muted; mute.classList.toggle("on", muted); apply(); };
+
+  row.append(head, slider);
+  return row;
+}
+
+async function exportMix() {
+  const button = el("export");
+  button.disabled = true;
+  button.textContent = "Export en cours…";
+  try {
+    const outcome = await call("export_mix", {
+      source: state.clip.path,
+      gains: [...state.gains.entries()],
+    });
+    toast(
+      outcome.clipped
+        ? `Exporté, mais le mixage saturait (crête ${outcome.peak.toFixed(2)}) — baisse les pistes les plus fortes`
+        : `Exporté : ${outcome.path.split("\\").pop()} (${outcome.megabytes.toFixed(0)} Mo)`,
+      outcome.clipped,
+    );
+    await loadLibrary();
+  } finally {
+    button.disabled = false;
+    button.textContent = "Exporter";
+  }
+}
+
+async function deleteClip() {
+  await call("delete_clip", { path: state.clip.path });
+  toast("Clip supprimé");
+  // `closeEditor` reconstruit déjà la bibliothèque.
+  await closeEditor();
+}
+
+async function closeEditor() {
+  preview.unload();
+  if (state.clip) invoke("clear_preview", { source: state.clip.path }).catch(() => {});
+  // Couper la source libère le fichier : sans cela Windows le garde verrouillé
+  // et la suppression échoue.
+  el("player").pause();
+  el("player").removeAttribute("src");
+  el("player").load();
+  el("editorView").classList.add("hidden");
+  el("libraryView").classList.remove("hidden");
+  el("back").classList.add("hidden");
+  state.clip = null;
+  // Les aperçus ont été libérés à l'ouverture de l'éditeur : la bibliothèque
+  // est reconstruite pour les rétablir.
+  await loadLibrary();
+}
+
+// ─────────────────────────────── réglages ──────────────────────────────────
+
+let draftBuffer = 60;
+
+async function openSettings() {
+  const settings = await call("get_settings");
+  draftBuffer = settings.buffer_seconds;
+  el("outputDir").value = settings.output_dir;
+  el("hotkey").value = settings.hotkey;
+  renderBufferChoices();
+  await renderHotkeyState();
+  el("settingsPanel").classList.remove("hidden");
+}
+
+/// Affiche si le raccourci est réellement pris en compte par Windows.
+///
+/// Un raccourci refusé — combinaison déjà utilisée par un autre logiciel —
+/// rendait la fonction principale du produit inutilisable sans le moindre
+/// signe. C'est la première chose que l'utilisateur doit pouvoir vérifier.
+async function renderHotkeyState() {
+  const status = await invoke("hotkey_status").catch(() => null);
+  const node = el("hotkeyState");
+  if (!status) {
+    node.textContent = "";
+    return;
+  }
+  node.textContent = status.registered
+    ? `✓ ${status.combination} est actif`
+    : `⚠ ${status.error ?? "raccourci inactif"} — essaie une autre combinaison`;
+  node.classList.toggle("warn", !status.registered);
+}
+
+function renderBufferChoices() {
+  for (const button of el("bufferChoices").children) {
+    button.classList.toggle("active", Number(button.dataset.seconds) === draftBuffer);
+  }
+  // Deux coûts croissent avec la durée, et l'utilisateur doit les connaître
+  // avant de choisir : le disque (~5,3 Mo/s mesurés en 1080p60) et le temps de
+  // sauvegarde, proportionnel au nombre de segments à recoller (~1,3 s par
+  // minute de buffer).
+  const gigabytes = Math.round((draftBuffer * 5.3) / 1024 * 10) / 10;
+  const saveSeconds = Math.max(0.5, (draftBuffer / 60) * 1.3).toFixed(1);
+  el("bufferHint").textContent =
+    `Environ ${gigabytes} Go de disque en continu, et ~${saveSeconds} s par sauvegarde.`;
+}
+
+async function saveSettings() {
+  const running = state.recording;
+  await call("set_settings", {
+    settings: {
+      buffer_seconds: draftBuffer,
+      output_dir: el("outputDir").value.trim(),
+      hotkey: el("hotkey").value.trim() || "Ctrl+Shift+X",
+    },
+  });
+
+  // Le raccourci est réappliqué immédiatement : si Windows le refuse, autant
+  // le savoir avant de retourner jouer.
+  const status = await invoke("hotkey_status").catch(() => null);
+  if (status && !status.registered) {
+    toast(`Raccourci non pris en compte : ${status.error}`, true);
+    await renderHotkeyState();
+    return;
+  }
+  el("settingsPanel").classList.add("hidden");
+
+  // La durée du buffer est fixée à l'ouverture de la capture : sans redémarrage
+  // le réglage ne prendrait effet qu'à la prochaine session, ce qui serait
+  // incompréhensible.
+  if (running) {
+    await call("stop_recording");
+    const tracks = await call("start_recording");
+    state.recording = true;
+    renderStatus(tracks);
+    toast("Réglages appliqués — buffer redémarré");
+  } else {
+    toast("Réglages enregistrés");
+  }
+  await loadLibrary();
+}
+
+// ─────────────────────────────── démarrage ─────────────────────────────────
+
+el("toggle").onclick = toggleRecording;
+el("save").onclick = saveClip;
+el("back").onclick = closeEditor;
+el("export").onclick = exportMix;
+el("delete").onclick = deleteClip;
+
+// ── écoute en direct, calée sur le lecteur ──
+preview = new Preview(el("player"));
+const player = el("player");
+player.addEventListener("play", () => preview.start());
+player.addEventListener("pause", () => preview.stop());
+player.addEventListener("seeked", () => { if (!player.paused) preview.start(); });
+player.addEventListener("ended", () => preview.stop());
+// Surveillance de la dérive : les horloges du webview et de la carte son sont
+// indépendantes, un écart s'installe lentement et doit être rattrapé.
+setInterval(() => preview.tick(), 500);
+
+// ── réglages ──
+el("settings").onclick = openSettings;
+el("settingsCancel").onclick = () => el("settingsPanel").classList.add("hidden");
+el("settingsSave").onclick = saveSettings;
+el("settingsPanel").onclick = (event) => {
+  if (event.target === el("settingsPanel")) el("settingsPanel").classList.add("hidden");
+};
+for (const button of el("bufferChoices").children) {
+  button.onclick = () => { draftBuffer = Number(button.dataset.seconds); renderBufferChoices(); };
+}
+
+// ── sauvegardes déclenchées hors de la vue (raccourci, barre système) ──
+listen("clip-saved", async (event) => {
+  toast(
+    `Clip de ${formatDuration(event.payload.seconds)} sauvegardé en ${Math.round(event.payload.total_ms)} ms`,
+  );
+  await loadLibrary();
+});
+listen("save-failed", (event) => toast(String(event.payload), true));
+
+// ── surveillance du buffer ──
+//
+// Un buffer arrêté sans que l'utilisateur le sache est le pire défaut possible :
+// il jouerait des heures en se croyant couvert. On vérifie donc l'état à
+// intervalle régulier plutôt que d'attendre l'appui sur le raccourci.
+let lastRestarts = 0;
+setInterval(async () => {
+  if (!state.recording) return;
+  const health = await invoke("recorder_health").catch(() => null);
+  if (!health) return;
+  if (!health.running) {
+    state.recording = false;
+    renderStatus([]);
+    toast(health.failure ?? "Le buffer s'est arrêté", true);
+  } else if (health.stalled) {
+    // Le buffer se déclare actif mais n'a plus traité d'image : sans cette
+    // alerte, l'utilisateur jouerait des heures en se croyant couvert.
+    el("status").classList.remove("live");
+    el("statusText").textContent =
+      `⚠ Buffer figé depuis ${Math.round(health.stalled_ms / 1000)} s`;
+    toast("Le buffer ne progresse plus — arrête puis redémarre l'enregistrement", true);
+  } else if (health.restarts > lastRestarts) {
+    // Un changement de définition vide le buffer : le dire évite de croire
+    // qu'on couvre encore les minutes précédentes.
+    lastRestarts = health.restarts;
+    toast("La définition de l'écran a changé — le buffer est reparti de zéro", true);
+    el("statusText").textContent = "Enregistre — reparti après changement d'écran";
+  } else if (health.write_errors > 0) {
+    el("statusText").textContent = `Enregistre — ${health.write_errors} image(s) perdue(s)`;
+  }
+}, 3000);
+
+(async () => {
+  state.recording = await call("is_recording");
+  renderStatus(state.recording ? await call("current_tracks") : []);
+  await loadLibrary();
+})();

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>SmartClip Studio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <button class="btn ghost hidden" id="back">← Bibliothèque</button>
+      <div class="brand">SmartClip <span>Studio</span></div>
+      <div class="spacer"></div>
+      <div class="status" id="status"><span class="dot"></span><span id="statusText">Buffer arrêté</span></div>
+      <button class="btn ghost" id="settings" title="Réglages">⚙</button>
+      <button class="btn" id="toggle">Démarrer le buffer</button>
+      <button class="btn primary" id="save" disabled>Sauvegarder</button>
+    </header>
+
+    <main>
+      <section id="libraryView">
+        <div class="grid" id="grid"></div>
+        <div class="empty hidden" id="empty">
+          <strong>Aucun clip pour l'instant</strong>
+          <div>Démarre le buffer, joue, puis appuie sur Ctrl+Shift+X ou sur Sauvegarder.</div>
+        </div>
+      </section>
+
+      <section id="editorView" class="hidden">
+        <div class="editor">
+          <div>
+            <video id="player" controls></video>
+          </div>
+          <div class="panel">
+            <h2 id="clipName"></h2>
+            <div class="hint" id="previewState">Règle chaque source, puis exporte.</div>
+            <div id="tracks"></div>
+            <div style="margin-top:16px; display:flex; gap:8px">
+              <button class="btn primary" id="export" style="flex:1">Exporter</button>
+              <button class="btn danger" id="delete">Supprimer</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="overlay hidden" id="settingsPanel">
+    <div class="dialog">
+      <h2>Réglages</h2>
+
+      <label>Durée conservée en arrière</label>
+      <div class="choices" id="bufferChoices">
+        <button data-seconds="30">30 s</button>
+        <button data-seconds="60">1 min</button>
+        <button data-seconds="180">3 min</button>
+        <button data-seconds="300">5 min</button>
+      </div>
+      <div class="hint" id="bufferHint"></div>
+
+      <label>Dossier des clips</label>
+      <input type="text" id="outputDir" spellcheck="false" />
+
+      <label>Raccourci de sauvegarde</label>
+      <input type="text" id="hotkey" spellcheck="false" placeholder="Ctrl+Shift+X" />
+      <div class="hint" id="hotkeyState"></div>
+
+      <div class="hint">
+        Le raccourci fonctionne même fenêtre fermée. Fermer la fenêtre laisse le
+        buffer tourner ; on quitte par la barre système.
+      </div>
+
+      <div class="dialog-actions">
+        <button class="btn ghost" id="settingsCancel">Annuler</button>
+        <button class="btn primary" id="settingsSave">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

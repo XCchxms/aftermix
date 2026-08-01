@@ -1,0 +1,8 @@
+/target
+# Sorties des spikes
+*.mp4
+*.wav
+*.mkv
+
+# Sources generees par Tauri
+crates/smartclip-app/gen/

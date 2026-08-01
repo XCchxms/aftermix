@@ -1,0 +1,46 @@
+[package]
+name = "spikes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# Prototypes jetables de la Phase 0. Chacun valide un risque du registre et
+# n'est pas destiné à être repris tel quel dans le moteur.
+
+[dependencies]
+smartclip-core.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+# La macro #[implement] génère du code qui référence `windows_core` par son nom
+# de crate : il doit donc être une dépendance directe, pas seulement réexporté.
+windows-core.workspace = true
+
+[dependencies.windows]
+workspace = true
+features = [
+    "Foundation",
+    "Win32_Media_Audio",
+    # SECURITY_ATTRIBUTES, exigé par la signature de CreateEventW.
+    "Win32_Security",
+    "Win32_System_Com_StructuredStorage",
+    "Graphics_Capture",
+    "Graphics_DirectX_Direct3D11",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
+    "Win32_Media_MediaFoundation",
+    "Win32_System_Com",
+    # ICodecAPI::SetValue et VARIANT sont gated derrière Ole + Variant.
+    "Win32_System_Ole",
+    "Win32_System_Performance",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+    "Win32_System_WinRT",
+    "Win32_System_WinRT_Direct3D11",
+    "Win32_System_WinRT_Graphics_Capture",
+]

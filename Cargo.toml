@@ -1,0 +1,30 @@
+﻿[workspace]
+resolver = "3"
+members = ["crates/smartclip-app", "crates/smartclip-core", "crates/smartclip-engine", "crates/spikes"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[workspace.dependencies]
+smartclip-core = { path = "crates/smartclip-core" }
+smartclip-engine = { path = "crates/smartclip-engine" }
+windows = "0.62"
+windows-core = "0.62"
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+parking_lot = "0.12"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Les spikes tournent 10 min en continu : sans optimisations la mesure d'impact
+# CPU/FPS n'a aucun sens.
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>SmartClip</title>
+  <style>
+    /* Fenêtre sans décor, toujours au premier plan : le fond doit rester
+       transparent pour ne laisser voir que la pastille. */
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font: 13px/1.4 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+      user-select: none;
+      /* L'overlay ne doit jamais intercepter un clic destiné au jeu. */
+      pointer-events: none;
+    }
+
+    .badge {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 10px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: rgba(18, 20, 27, 0.94);
+      border: 1px solid rgba(106, 92, 255, 0.45);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+      color: #e7e9ee;
+      opacity: 0;
+      transform: translateX(16px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .badge.show { opacity: 1; transform: none; }
+    .badge.error { border-color: rgba(255, 92, 106, 0.5); }
+
+    .dot {
+      width: 9px; height: 9px; flex: none;
+      border-radius: 50%;
+      background: #2ee6a8;
+    }
+    .badge.error .dot { background: #ff5c6a; }
+
+    .title { font-weight: 600; }
+    .body { font-size: 12px; color: #9aa0ae; }
+  </style>
+</head>
+<body>
+  <div class="badge" id="badge">
+    <span class="dot"></span>
+    <div>
+      <div class="title" id="title">Clip enregistré</div>
+      <div class="body" id="body"></div>
+    </div>
+  </div>
+  <script>
+    const { listen } = window.__TAURI__.event;
+    const badge = document.getElementById("badge");
+
+    listen("overlay-flash", (event) => {
+      document.getElementById("title").textContent = event.payload.title;
+      document.getElementById("body").textContent = event.payload.body;
+      badge.classList.toggle("error", Boolean(event.payload.error));
+      // Redémarre l'animation même si une pastille est déjà affichée.
+      badge.classList.remove("show");
+      void badge.offsetWidth;
+      badge.classList.add("show");
+    });
+
+    listen("overlay-hide", () => badge.classList.remove("show"));
+  </script>
+</body>
+</html>
