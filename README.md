@@ -333,7 +333,30 @@ sans perte donc sans compromis sur l'édition.
 
 **`CBR` et `LowDelayVBR` sont à écarter sur AMD.** Utiliser `--rc 1`.
 
-**La vidéo doit être datée au QPC, jamais à l'indice de frame.** Le premier run
+**Dans les segments, la vidéo se date en cadence constante — pas au QPC.**
+Le QPC paraît plus juste, c'est l'horloge de l'audio, mais il inscrit dans le
+fichier chaque hoquet de la boucle : un retard de deux secondes devient un trou
+de deux secondes, image figée et son qui continue. Mesuré sur un clip réel :
+**83 ms d'intervalle moyen, des trous jusqu'à 24 secondes, 12 images/s**.
+
+La bisection a été faite en comparant avec du code inchangé depuis le début —
+`spike1_capture` (capture seule) et `spike4_ring` (segments + recollage) donnent
+tous deux **16,7 ms et 60 images/s, zéro irrégularité**. Deux différences les
+séparaient du moteur, toutes deux introduites après coup :
+
+1. Le compteur d'images n'avançait que lorsqu'une image arrivait, au lieu
+   d'avancer à chaque tour d'horloge : les horodatages se désolidarisaient du
+   temps qui passe dès qu'une image manquait.
+2. La régulation adaptative sautait des images sur écriture lente.
+
+→ La commande `smartclip probe <clip.mp4>` mesure la régularité des
+horodatages. C'est elle qui a permis de trancher : **mesurer plutôt que
+raisonner sur du code qu'on vient d'écrire**.
+
+Note historique — la remarque ci-dessous portait sur le Spike 3, où la vidéo
+était écrite d'un seul tenant, sans segments. Elle ne s'applique pas au moteur :
+
+**~~La vidéo doit être datée au QPC, jamais à l'indice de frame.~~** Le premier run
 de 5 min du Spike 3 datait les frames en `index × durée_nominale` : l'écart avec
 le QPC atteignait **−33 ms** et fluctuait au rythme de la gigue du `sleep`
 (−16,9 / −26,7 / −36,5 / −26,4 / −33,0 ms). Comme l'audio est daté au QPC, cet
@@ -417,16 +440,18 @@ threads en attente, plus une ligne de journal pendant deux heures, et aucun
 compteur d'erreur pour le signaler. C'est le pire mode de défaillance possible —
 l'application paraît saine et n'enregistre rien.
 
-Trois parades, du symptôme vers la cause :
+Deux parades conservées :
 - **Battement de cœur** : la boucle horodate chaque image ; au-delà de 15 s de
   silence, `Health::stalled()` bascule et l'interface alerte.
 - **Attentes bornées** : `recv_timeout` partout où un `recv` nu pouvait figer le
   moteur — attente de segment, réponse à une sauvegarde.
-- **Régulation adaptative** : la durée de chaque `WriteSample` est mesurée ; au
-  delà de deux périodes d'image, on saute autant d'images que de périodes de
-  retard. La pression retombe avant la saturation, et la régulation se relâche
-  seule. Sauter des images dégrade la fluidité ; saturer l'encodeur fige tout
-  l'enregistrement.
+
+⚠️ Une troisième parade, une **régulation adaptative** qui sautait des images sur
+écriture lente, a été **retirée** : elle produisait le défaut qu'elle prétendait
+éviter (voir plus bas). Le blocage sous charge n'a donc plus de parade active
+autre que la détection. S'il réapparaît, il faudra une autre approche —
+probablement déporter l'encodage dans un thread à file bornée, plutôt que
+toucher au rythme de la boucle.
 
 Une campagne de 40 min pendant une partie de Fortnite est allée à son terme
 (0 erreur, mémoire stable, 31 images sautées sur ~144 000). Mais une reproduction
