@@ -299,6 +299,9 @@ fn accumulate_stream(input: &Path, stream: u32, gain: f32, mix: &mut [f32]) -> R
             .context("le décodeur a refusé le format flottant")?;
 
         let mut empty_reads = 0u32;
+        // Échantillons déjà déposés pour cette piste, qui donnent la position
+        // du paquet suivant.
+        let mut written = 0usize;
         loop {
             let (mut actual, mut flags, mut timestamp) = (0u32, 0u32, 0i64);
             let mut sample: Option<IMFSample> = None;
@@ -332,18 +335,29 @@ fn accumulate_stream(input: &Path, stream: u32, gain: f32, mix: &mut [f32]) -> R
             buffer.Lock(&mut data, None, Some(&mut length))?;
 
             let samples = std::slice::from_raw_parts(data as *const f32, length as usize / 4);
-            let offset_frames =
-                (timestamp as i128 * SAMPLE_RATE as i128 / HNS_PER_SEC as i128) as usize;
-            let start = offset_frames * CHANNELS as usize;
 
+            // Les paquets d'une même piste se suivent, ils ne se placent pas
+            // par horodatage.
+            //
+            // Positionner chaque paquet d'après son timestamp semblait plus
+            // fidèle, mais ces horodatages sont arrondis : deux paquets
+            // consécutifs se chevauchent de quelques échantillons, et comme
+            // l'accumulation est une addition — nécessaire pour superposer les
+            // pistes — le signal s'ajoutait à lui-même sur la zone commune.
+            // D'où un craquement tous les 21 ms, soit un grésillement continu.
+            //
+            // Écrits à la suite, les paquets d'une piste forment un signal
+            // exact. Le décalage entre pistes reste correct : elles démarrent
+            // toutes au début du clip.
             for (i, &value) in samples.iter().enumerate() {
-                match mix.get_mut(start + i) {
+                match mix.get_mut(written + i) {
                     Some(slot) => *slot += value * gain,
                     // Au-delà de la durée annoncée : rien à faire, le tampon
                     // fait foi.
                     None => break,
                 }
             }
+            written += samples.len();
 
             buffer.Unlock()?;
         }
