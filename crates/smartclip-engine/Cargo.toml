@@ -19,6 +19,8 @@ windows-core.workspace = true
 workspace = true
 features = [
     "Foundation",
+    # Reconnaissance vocale hors ligne pour la phrase d'activation.
+    "Media_SpeechRecognition",
     "Graphics_Capture",
     "Graphics_DirectX_Direct3D11",
     "Win32_Foundation",
