@@ -151,10 +151,12 @@ impl SegmentFactory {
         }
 
         unsafe { writer.BeginWriting()? };
+        let audio_frames = vec![0i64; audio_streams.len()];
         Ok(Segment {
             writer,
             video_stream,
             audio_streams,
+            audio_frames,
             path,
             end_hns: 0,
             has_samples: false,
@@ -179,6 +181,8 @@ pub struct Segment {
     path: PathBuf,
     /// Fin de la timeline **vidéo**, qui donne sa durée au segment.
     end_hns: i64,
+    /// Échantillons audio écrits par piste, qui donnent leur position.
+    audio_frames: Vec<i64>,
     /// Vrai dès qu'un échantillon, vidéo ou audio, a été écrit.
     ///
     /// Distinct de `end_hns` : un segment peut avoir reçu de l'audio sans
@@ -222,11 +226,31 @@ impl Segment {
         Ok(())
     }
 
-    pub fn write_audio(&mut self, track: usize, pcm: &[i16], pts_hns: i64) -> Result<()> {
+    /// Écrit un paquet audio à la suite du précédent, sur la piste `track`.
+    ///
+    /// **La position vient du nombre d'échantillons déjà écrits, jamais d'un
+    /// horodatage.**
+    ///
+    /// Dater les paquets par leur position QPC relative à l'origine du segment
+    /// paraissait naturel, mais les paquets qui attendaient dans la file au
+    /// moment d'une rotation sont antérieurs à cette origine : leur position
+    /// devenait négative, ramenée à zéro, et plusieurs paquets se retrouvaient
+    /// écrasés au même instant. Résultat, un grésillement à chaque frontière de
+    /// segment — audible sur toutes les pistes, y compris micro coupé.
+    ///
+    /// Un compteur d'échantillons garantit une piste continue, sans trou ni
+    /// chevauchement. C'est aussi ce qui rend l'audio cohérent avec la vidéo,
+    /// elle-même écrite en cadence constante.
+    pub fn write_audio(&mut self, track: usize, pcm: &[i16]) -> Result<()> {
         let Some(&stream) = self.audio_streams.get(track) else {
             return Ok(());
         };
+        let Some(written) = self.audio_frames.get_mut(track) else {
+            return Ok(());
+        };
         let frames = pcm.len() / CHANNELS as usize;
+        let pts_hns = *written * HNS_PER_SEC / SAMPLE_RATE as i64;
+        *written += frames as i64;
         let duration = frames as i64 * HNS_PER_SEC / SAMPLE_RATE as i64;
         unsafe {
             let bytes = std::mem::size_of_val(pcm);

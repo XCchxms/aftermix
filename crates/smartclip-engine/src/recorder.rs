@@ -20,7 +20,7 @@ use crate::audio::{self, AudioChunk, Source};
 use crate::concat;
 use crate::segment::{Segment, SegmentFactory, SegmentInfo, SegmentRing};
 use crate::video::Capture;
-use crate::{CHANNELS, Config, SAMPLE_RATE, hns_since_boot};
+use crate::{CHANNELS, Config, SAMPLE_RATE};
 
 /// État de santé du buffer.
 ///
@@ -548,7 +548,6 @@ fn run(
     const MIC_RETRY_ROTATIONS: u32 = 8;
     let mut mic_retry = 0u32;
     let mut segment_first_frame = 0u64;
-    let mut segment_origin = hns_since_boot(clock.origin().0, clock.frequency());
 
     loop {
         next_tick += tick;
@@ -566,7 +565,6 @@ fn run(
                     &slots.labels(),
                 );
                 let _ = reply.send(outcome);
-                segment_origin = hns_since_boot(clock.now().0, clock.frequency());
                 segment_first_frame = index;
             }
             Ok(Command::Tracks(reply)) => {
@@ -608,19 +606,18 @@ fn run(
             // ensemble.
             for receiver in &audio_receivers {
                 for chunk in receiver.try_iter() {
-                    let pts = (chunk.boot_hns - segment_origin).max(0);
-                    outcome = outcome.and(segment.write_audio(chunk.track, &chunk.pcm, pts));
+                    outcome = outcome.and(segment.write_audio(chunk.track, &chunk.pcm));
                 }
             }
 
             // Les emplacements vacants reçoivent un bloc de silence toutes les
-            // 100 ms, aligné sur le début du bloc pour rester contigu.
+            // 100 ms. Leur position découle du compteur d'échantillons de la
+            // piste, comme pour les vraies sources.
             let since_start = index - segment_first_frame;
             if since_start % silence_period == 0 {
-                let block_pts = (since_start / silence_period) as i64 * SILENCE_MS as i64 * 10_000;
                 for slot_index in 0..config.track_slots {
                     if !slots.is_active(slot_index) {
-                        outcome = outcome.and(segment.write_audio(slot_index, &silence, block_pts));
+                        outcome = outcome.and(segment.write_audio(slot_index, &silence));
                     }
                 }
             }
@@ -714,7 +711,6 @@ fn run(
                 if swept > 0 {
                     tracing::debug!("{swept} segment(s) orphelin(s) supprimé(s)");
                 }
-                segment_origin = hns_since_boot(clock.now().0, clock.frequency());
                 segment_first_frame = index + 1;
             }
         }
