@@ -15,6 +15,7 @@ pub mod library;
 pub mod recorder;
 pub mod segment;
 pub mod video;
+pub mod voice;
 
 pub use export::{ClipInfo, MixOutcome, mix_and_export};
 pub use library::{Clip, ClipMeta};

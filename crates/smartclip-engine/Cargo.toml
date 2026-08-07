@@ -14,6 +14,9 @@ tracing-subscriber.workspace = true
 # La macro #[implement] génère du code référençant `windows_core` par son nom
 # de crate : dépendance directe obligatoire.
 windows-core.workspace = true
+# Attente des operations WinRT de la reconnaissance vocale.
+windows-future = "0.3"
+windows-collections = "0.3"
 
 [dependencies.windows]
 workspace = true

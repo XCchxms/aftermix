@@ -56,6 +56,9 @@ struct Settings {
     /// principale du produit lui reste inaccessible.
     #[serde(default = "default_hotkey")]
     hotkey: String,
+    /// Phrase d'activation vocale. Vide = écoute désactivée.
+    #[serde(default)]
+    voice_phrase: String,
 }
 
 fn default_hotkey() -> String {
@@ -71,6 +74,9 @@ impl Default for Settings {
             buffer_seconds: 60.0,
             output_dir: videos.to_string_lossy().into_owned(),
             hotkey: default_hotkey(),
+            // Désactivée par défaut : écouter le micro en permanence doit
+            // rester un choix explicite de l'utilisateur.
+            voice_phrase: String::new(),
         }
     }
 }
@@ -116,6 +122,53 @@ struct AppState {
     recorder: Mutex<Option<Recorder>>,
     settings: Mutex<Settings>,
     hotkey: Mutex<HotkeyStatus>,
+    voice: Mutex<Option<smartclip_engine::voice::VoiceTrigger>>,
+    voice_status: Mutex<HotkeyStatus>,
+}
+
+/// (Ré)active l'écoute vocale, et mémorise le résultat.
+///
+/// Une phrase vide coupe l'écoute : c'est le réglage par défaut, car écouter le
+/// micro en permanence doit rester un choix explicite.
+fn apply_voice(app: &AppHandle, phrase: &str) -> HotkeyStatus {
+    let state = app.state::<AppState>();
+    // L'ancienne écoute est arrêtée avant d'en ouvrir une nouvelle : deux
+    // sessions concurrentes se disputeraient le micro.
+    *state.voice.lock().unwrap() = None;
+
+    let mut status = HotkeyStatus {
+        combination: phrase.to_string(),
+        registered: false,
+        error: None,
+    };
+
+    if phrase.trim().is_empty() {
+        *state.voice_status.lock().unwrap() = status.clone();
+        return status;
+    }
+
+    let handle = app.clone();
+    match smartclip_engine::voice::VoiceTrigger::start(phrase, move || {
+        save_from_shortcut(&handle);
+    }) {
+        Ok(trigger) => {
+            *state.voice.lock().unwrap() = Some(trigger);
+            status.registered = true;
+        }
+        Err(e) => status.error = Some(format!("{e:#}")),
+    }
+
+    match &status.error {
+        Some(error) => tracing::warn!("écoute vocale indisponible : {error}"),
+        None => tracing::info!("écoute vocale active"),
+    }
+    *state.voice_status.lock().unwrap() = status.clone();
+    status
+}
+
+#[tauri::command]
+fn voice_status(state: State<'_, AppState>) -> HotkeyStatus {
+    state.voice_status.lock().unwrap().clone()
 }
 
 impl Default for AppState {
@@ -124,6 +177,8 @@ impl Default for AppState {
             recorder: Mutex::new(None),
             settings: Mutex::new(Settings::load()),
             hotkey: Mutex::new(HotkeyStatus::default()),
+            voice: Mutex::new(None),
+            voice_status: Mutex::new(HotkeyStatus::default()),
         }
     }
 }
@@ -192,10 +247,12 @@ fn set_settings(
         .map_err(|e| format!("dossier inutilisable : {e}"))?;
     settings.persist().map_err(|e| format!("{e:#}"))?;
     let combination = settings.hotkey.clone();
+    let phrase = settings.voice_phrase.clone();
     *state.settings.lock().unwrap() = settings;
-    // Le nouveau raccourci prend effet immédiatement : le laisser attendre un
-    // redémarrage donnerait l'impression qu'il ne marche pas.
+    // Raccourci et phrase prennent effet immédiatement : les laisser attendre
+    // un redémarrage donnerait l'impression qu'ils ne marchent pas.
     apply_hotkey(&app, &combination);
+    apply_voice(&app, &phrase);
     Ok(())
 }
 
@@ -633,8 +690,12 @@ fn main() {
             let dir = PathBuf::from(&state.settings.lock().unwrap().output_dir);
             let _ = std::fs::create_dir_all(dir);
 
-            let combination = state.settings.lock().unwrap().hotkey.clone();
+            let (combination, phrase) = {
+                let settings = state.settings.lock().unwrap();
+                (settings.hotkey.clone(), settings.voice_phrase.clone())
+            };
             apply_hotkey(app.handle(), &combination);
+            apply_voice(app.handle(), &phrase);
 
             let open = MenuItem::with_id(app, "open", "Ouvrir SmartClip", true, None::<&str>)?;
             let save = MenuItem::with_id(app, "save", "Sauvegarder un clip", true, None::<&str>)?;
@@ -676,6 +737,7 @@ fn main() {
             current_tracks,
             recorder_health,
             hotkey_status,
+            voice_status,
             save_clip,
             export_mix,
             prepare_preview,

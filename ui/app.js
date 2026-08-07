@@ -340,8 +340,10 @@ async function openSettings() {
   draftBuffer = settings.buffer_seconds;
   el("outputDir").value = settings.output_dir;
   el("hotkey").value = settings.hotkey;
+  el("voicePhrase").value = settings.voice_phrase ?? "";
   renderBufferChoices();
   await renderHotkeyState();
+  await renderVoiceState();
   el("settingsPanel").classList.remove("hidden");
 }
 
@@ -377,6 +379,26 @@ function renderBufferChoices() {
     `Environ ${gigabytes} Go de disque en continu, et ~${saveSeconds} s par sauvegarde.`;
 }
 
+/// Affiche l'état de l'écoute vocale.
+///
+/// Elle dépend de la reconnaissance vocale de Windows, qui peut manquer — pack
+/// de langue absent, fonctionnalité désactivée. Le silence serait pire que
+/// l'absence de fonction : l'utilisateur répéterait sa phrase sans savoir
+/// pourquoi rien ne se passe.
+async function renderVoiceState() {
+  const status = await invoke("voice_status").catch(() => null);
+  const node = el("voiceState");
+  if (!status || !status.combination) {
+    node.textContent = "Laisse vide pour ne pas écouter le micro.";
+    node.classList.remove("warn");
+    return;
+  }
+  node.textContent = status.registered
+    ? `✓ Dis « ${status.combination} » pour sauvegarder`
+    : `⚠ ${status.error ?? "écoute vocale indisponible"}`;
+  node.classList.toggle("warn", !status.registered);
+}
+
 async function saveSettings() {
   const running = state.recording;
   await call("set_settings", {
@@ -384,8 +406,10 @@ async function saveSettings() {
       buffer_seconds: draftBuffer,
       output_dir: el("outputDir").value.trim(),
       hotkey: el("hotkey").value.trim() || "Ctrl+Shift+X",
+      voice_phrase: el("voicePhrase").value.trim(),
     },
   });
+  await renderVoiceState();
 
   // Le raccourci est réappliqué immédiatement : si Windows le refuse, autant
   // le savoir avant de retourner jouer.
