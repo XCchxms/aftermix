@@ -157,8 +157,17 @@ export class Preview {
   setGain(index, gain) {
     const track = this.tracks.get(index);
     if (!track) return;
+    const wasSilent = track.gainNode.gain.value <= 0;
     // Une rampe très courte évite le claquement d'un saut de gain brutal.
     track.gainNode.gain.setTargetAtTime(gain, this.context.currentTime, 0.01);
+    track.gainNode.gain.value = gain;
+
+    // Une piste rallumée n'a pas de source en cours — elle n'en avait pas
+    // besoin tant qu'elle était à zéro. On relance l'ensemble pour la remettre
+    // en jeu, calée sur les autres.
+    if (wasSilent && gain > 0 && this.playing && !track.source) {
+      this.start();
+    }
   }
 
   /// (Re)démarre toutes les pistes à la position courante de la vidéo.
@@ -173,6 +182,17 @@ export class Preview {
 
     const now = this.context.currentTime;
     for (const track of this.tracks.values()) {
+      // Les pistes muettes ne sont pas jouées du tout.
+      //
+      // Chaque source active occupe le thread audio en temps réel, pendant que
+      // le webview décode aussi la vidéo. Au-delà de quelques sources, il ne
+      // tient plus la cadence et la sortie craque. Une piste sans contenu, ou
+      // dont le fader est à zéro, n'apporte rien : ne pas la créer réduit
+      // d'autant la charge — souvent de moitié, la moitié des emplacements
+      // étant vides.
+      if (track.peak < SILENCE_PEAK || track.gainNode.gain.value <= 0) {
+        continue;
+      }
       const source = this.context.createBufferSource();
       source.buffer = track.buffer;
       source.connect(track.gainNode);
