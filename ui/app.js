@@ -148,6 +148,13 @@ async function openEditor(clip) {
   el("editorView").classList.remove("hidden");
   el("back").classList.remove("hidden");
   el("clipName").textContent = clip.name;
+  // La vidéo est coupée AVANT d'être chargée.
+  //
+  // Le lecteur du webview joue d'office une des pistes audio du MP4 — la
+  // première, choisie sans rapport avec les réglages. La couper seulement après
+  // le chargement des pistes laissait passer ce son, y compris tous les faders
+  // à zéro : on entendait alors une piste qu'on croyait muette.
+  el("player").muted = true;
   el("player").src = convertFileSrc(clip.path);
 
   const container = el("tracks");
@@ -211,6 +218,8 @@ async function openEditor(clip) {
     // Cet échec était auparavant journalisé dans une console invisible : la
     // vidéo restait non-muette et jouait sa piste par défaut, les faders
     // pilotaient un mixeur vide, et rien n'expliquait pourquoi.
+    // Sans écoute en direct, on rétablit le son du lecteur : mieux vaut
+    // entendre une seule piste que rien du tout.
     el("player").muted = false;
     el("previewState").textContent =
       "⚠ Écoute en direct indisponible — les réglages s'appliqueront quand même à l'export";

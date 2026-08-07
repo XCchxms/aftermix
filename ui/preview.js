@@ -9,7 +9,13 @@
 // secondes. Web Audio place au contraire chaque source sur une position
 // explicite de la timeline, et permet de la corriger.
 
-const RESYNC_THRESHOLD = 0.04; // 40 ms — seuil au-delà duquel un décalage s'entend
+/// Seuil de resynchronisation.
+///
+/// Chaque resynchronisation relance toutes les sources, ce qui s'entend malgré
+/// le fondu : mieux vaut tolérer un décalage discret que corriger sans cesse.
+/// 120 ms restent imperceptibles sur un clip de jeu, là où 40 ms déclenchaient
+/// une correction toutes les quelques secondes.
+const RESYNC_THRESHOLD = 0.12;
 
 /// En dessous de ce niveau, une piste est considérée comme muette.
 const SILENCE_PEAK = 0.005;
@@ -165,10 +171,23 @@ export class Preview {
     this.startedAt = this.context.currentTime;
     this.startOffset = offset;
 
+    const now = this.context.currentTime;
     for (const track of this.tracks.values()) {
       const source = this.context.createBufferSource();
       source.buffer = track.buffer;
       source.connect(track.gainNode);
+
+      // Fondu d'entrée de 12 ms.
+      //
+      // Démarrer une source en pleine forme d'onde produit un clic. Comme la
+      // resynchronisation relance toutes les sources — jusqu'à deux fois par
+      // seconde en cas de dérive —, ces clics se succédaient et s'entendaient
+      // comme un grésillement continu.
+      const target = track.gainNode.gain.value;
+      track.gainNode.gain.cancelScheduledValues(now);
+      track.gainNode.gain.setValueAtTime(0, now);
+      track.gainNode.gain.linearRampToValueAtTime(target, now + 0.012);
+
       // Toutes les sources partent au même instant, avec le même décalage :
       // c'est ce qui garantit qu'elles restent entre elles parfaitement calées.
       source.start(0, Math.min(offset, track.buffer.duration));
