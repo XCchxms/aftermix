@@ -59,14 +59,6 @@ pub struct Health {
 /// seconde, et un pic de charge peut la ralentir sans qu'elle soit bloquée.
 const STALL_THRESHOLD_MS: u64 = 15_000;
 
-/// Au-delà de ce multiple de la période d'image, l'écriture est jugée trop
-/// lente et la régulation s'enclenche.
-///
-/// L'encodeur ne dit pas qu'il sature : il ralentit, puis `WriteSample` finit
-/// par ne plus rendre la main du tout. Mesurer sa durée est le seul moyen de
-/// voir venir. Le facteur 2 laisse passer la gigue ordinaire sans réagir.
-const SLOW_WRITE_FACTOR: u32 = 2;
-
 /// Pourquoi la boucle de capture a rendu la main.
 enum RunOutcome {
     /// Arrêt demandé.
@@ -128,17 +120,6 @@ impl Heartbeat {
 /// À 60 images par seconde, cela représente deux secondes : assez pour absorber
 /// un incident passager, trop court pour laisser durer une panne réelle.
 const MAX_CONSECUTIVE_ERRORS: u32 = 120;
-
-/// Combien d'images sauter après une écriture trop lente.
-///
-/// Une par période de retard accumulé, plafonné à une seconde. Au-delà, mieux
-/// vaut reprendre le rythme normal et laisser la mesure suivante décider à
-/// nouveau, plutôt que de creuser un trou d'images sur un seul incident.
-fn skip_budget_for(write_time: Duration, tick: Duration, fps: u32) -> u32 {
-    let tick_ns = tick.as_nanos().max(1);
-    let late = (write_time.as_nanos() / tick_ns) as u64;
-    late.min(fps.max(1) as u64) as u32
-}
 
 /// Ce qu'une sauvegarde a produit.
 #[derive(Debug, Clone)]
@@ -562,8 +543,6 @@ fn run(
     let mut next_tick = Instant::now();
     let mut index = 0u64;
     let mut consecutive_errors = 0u32;
-    let mut skip_budget = 0u32;
-    let mut slow_writes = 0u64;
     let mut run_outcome = RunOutcome::Stopped;
     /// Rotations à attendre avant de retenter le micro, soit ~16 s.
     const MIC_RETRY_ROTATIONS: u32 = 8;
@@ -601,31 +580,6 @@ fn run(
         // preuve que `WriteSample` rend la main.
         heartbeat.beat();
 
-        // Régulation adaptative : quand l'encodeur ralentit, on lui envoie
-        // moins d'images plutôt que d'attendre qu'il se bloque.
-        //
-        // Sauter une image sur deux dégrade la fluidité du clip ; laisser
-        // saturer l'encodeur fige tout l'enregistrement. Le choix n'est pas
-        // difficile, et il se fait tout seul dès que la charge redescend.
-        if skip_budget > 0 {
-            skip_budget -= 1;
-            {
-                let mut state = health.lock().unwrap();
-                state.skipped_frames += 1;
-            }
-            // La texture est tout de même consommée, sinon le pool de capture
-            // se remplit et livre des images périmées au retour à la normale.
-            let _ = capture.next_texture(index);
-            heartbeat.beat();
-            let now = Instant::now();
-            if next_tick > now {
-                std::thread::sleep(next_tick - now);
-            } else {
-                next_tick = now + tick;
-            }
-            continue;
-        }
-
         if let Some((texture, _fresh)) = capture.next_texture(index)? {
             // Horodatage vidéo en **cadence constante**, dans le segment.
             //
@@ -645,20 +599,7 @@ fn run(
             // Une écriture qui échoue ne doit pas tuer le buffer : un disque
             // momentanément saturé ou un encodeur qui hoquette se traduit par
             // quelques images perdues, pas par la fin de l'enregistrement.
-            // Le chronomètre ne couvre que l'écriture **vidéo**.
-            //
-            // L'avoir étendu à l'audio a été une erreur : avec six pistes,
-            // l'écriture audio dépasse couramment une période d'image, si bien
-            // que la régulation croyait l'encodeur saturé et sautait des images
-            // en continu. La cadence tombait à 12 images par seconde et la
-            // vidéo devenait saccadée. Sauter une image ne soulage de toute
-            // façon que la vidéo — mesurer l'audio ici n'a aucun sens.
-            //
-            // Un blocage sur une écriture audio reste détecté, mais par le
-            // battement de cœur, qui est fait pour ça.
-            let write_start = Instant::now();
             let mut outcome = segment.write_video(texture, pts, frame_duration);
-            let write_time = write_start.elapsed();
 
             // L'audio suit immédiatement l'image, dans le même tour.
             //
@@ -682,20 +623,6 @@ fn run(
                         outcome = outcome.and(segment.write_audio(slot_index, &silence, block_pts));
                     }
                 }
-            }
-
-            // Si l'écriture a dépassé deux périodes, on saute autant d'images
-            // que de périodes de retard : la pression retombe immédiatement, et
-            // la régulation se relâche d'elle-même dès que l'encodeur suit.
-            if write_time > tick * SLOW_WRITE_FACTOR {
-                skip_budget = skip_budget_for(write_time, tick, config.fps);
-                if slow_writes % 60 == 0 {
-                    tracing::warn!(
-                        "encodeur lent ({:.0} ms pour une image) : {skip_budget} image(s) sautée(s)",
-                        write_time.as_secs_f64() * 1000.0
-                    );
-                }
-                slow_writes += 1;
             }
 
             match outcome {
@@ -790,8 +717,16 @@ fn run(
                 segment_origin = hns_since_boot(clock.now().0, clock.frequency());
                 segment_first_frame = index + 1;
             }
-            index += 1;
         }
+
+        // Le compteur avance à chaque tour d'horloge, qu'une image soit arrivée
+        // ou non — c'est ainsi que procède le Spike 4, dont les clips sont
+        // mesurés parfaitement réguliers.
+        //
+        // L'attacher aux seules images désolidarisait les horodatages du temps
+        // qui passe : la rotation des segments et le repère du silence
+        // dérivaient dès qu'une image manquait.
+        index += 1;
 
 
         let now = Instant::now();
@@ -1023,32 +958,6 @@ fn spawn_closer(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const TICK: Duration = Duration::from_nanos(16_666_666); // 60 images/s
-
-    #[test]
-    fn une_ecriture_rapide_ne_declenche_rien() {
-        assert_eq!(skip_budget_for(Duration::from_millis(5), TICK, 60), 0);
-    }
-
-    #[test]
-    fn le_retard_se_traduit_en_images_sautees() {
-        // 100 ms d'écriture à 60 images/s : six périodes de retard.
-        assert_eq!(skip_budget_for(Duration::from_millis(100), TICK, 60), 6);
-    }
-
-    #[test]
-    fn le_saut_est_plafonne_a_une_seconde() {
-        // Dix secondes d'écriture ne doivent pas creuser dix secondes de trou.
-        assert_eq!(skip_budget_for(Duration::from_secs(10), TICK, 60), 60);
-    }
-
-    #[test]
-    fn une_cadence_nulle_ne_provoque_pas_de_division_par_zero() {
-        // Config aberrante : la fonction doit rendre une valeur, pas paniquer.
-        let budget = skip_budget_for(Duration::from_millis(50), Duration::ZERO, 0);
-        assert_eq!(budget, 1);
-    }
 
     #[test]
     fn un_moteur_sain_n_est_pas_declare_fige() {
