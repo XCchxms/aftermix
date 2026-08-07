@@ -633,6 +633,32 @@ global, icône de barre système.
 Hors V1 : multi-écran, 4K/120, coupe et rognage, effets audio, partage direct,
 cloud, webcam, overlay in-game.
 
+### Déclenchement vocal — étudié, non implémenté
+
+Une phrase d'activation personnalisable, façon « Ok SmartClip », pour sauvegarder
+sans lâcher la souris. **Faisable**, API vérifiée :
+`Windows.Media.SpeechRecognition`, hors ligne, feature `Media_SpeechRecognition`
+de windows-rs.
+
+Ce qui rend l'approche viable : une `SpeechRecognitionListConstraint` compare à
+une liste de phrases au lieu de transcrire librement. Le moteur ne cherche pas à
+comprendre, il reconnaît — d'où une consommation négligeable et aucune
+dépendance au cloud.
+
+Trois limites à traiter dès la conception :
+- **Faux déclenchements** : en vocal ou en pleine partie, on parle beaucoup.
+  Exiger au moins quatre syllabes et n'accepter que les confiances `High` et
+  `Medium`. « Ok SmartClip » convient ; « clip » seul serait ingérable.
+- **Dépendance à Windows** : le pack de langue doit être installé. Prévoir le
+  même indicateur d'état que pour le raccourci — actif, ou raison du refus.
+- **Latence** d'environ une seconde, sans importance ici : le buffer couvre déjà
+  les dernières secondes.
+
+Les deux pièges d'API rencontrés — alimenter la contrainte par `Commands()`
+plutôt que par son constructeur, et attendre une opération asynchrone en
+interrogeant `Status()` faute de runtime async — sont consignés dans la tâche
+correspondante.
+
 ### Prévisualisation dans l'éditeur — implémentée
 
 Vidéo muette comme horloge maître, pistes décodées en `AudioBuffer` (Web Audio),
