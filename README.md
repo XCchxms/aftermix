@@ -92,6 +92,10 @@ direct** et export.
 vit dans la barre système et le buffer continue de tourner pendant qu'on joue.
 On quitte par le menu de la barre système, jamais par la croix.
 
+Une **phrase d'activation vocale** — « ok smartclip », ou ce qu'on veut — fait
+la même chose sans lâcher la souris. Désactivée par défaut, réglable à côté du
+raccourci.
+
 Le raccourci est **personnalisable** dans les réglages, et son état y est
 affiché : `✓ actif` ou la raison exacte du refus. C'est indispensable — une
 combinaison déjà prise par un autre logiciel est refusée par Windows, et sans
@@ -633,31 +637,30 @@ global, icône de barre système.
 Hors V1 : multi-écran, 4K/120, coupe et rognage, effets audio, partage direct,
 cloud, webcam, overlay in-game.
 
-### Déclenchement vocal — étudié, non implémenté
+### Déclenchement vocal — implémenté ✅
 
-Une phrase d'activation personnalisable, façon « Ok SmartClip », pour sauvegarder
-sans lâcher la souris. **Faisable**, API vérifiée :
-`Windows.Media.SpeechRecognition`, hors ligne, feature `Media_SpeechRecognition`
-de windows-rs.
+Une phrase d'activation personnalisable sauvegarde un clip sans lâcher la
+souris. Validé à l'usage : détection fiable, pas de faux déclenchement observé.
 
-Ce qui rend l'approche viable : une `SpeechRecognitionListConstraint` compare à
-une liste de phrases au lieu de transcrire librement. Le moteur ne cherche pas à
-comprendre, il reconnaît — d'où une consommation négligeable et aucune
-dépendance au cloud.
+`Windows.Media.SpeechRecognition`, **hors ligne**, feature
+`Media_SpeechRecognition` de windows-rs. Ce qui rend l'approche viable : une
+`SpeechRecognitionListConstraint` compare à une liste de phrases au lieu de
+transcrire librement. Le moteur ne cherche pas à comprendre, il reconnaît — d'où
+une consommation négligeable et rien qui quitte la machine.
 
-Trois limites à traiter dès la conception :
-- **Faux déclenchements** : en vocal ou en pleine partie, on parle beaucoup.
-  Exiger au moins quatre syllabes et n'accepter que les confiances `High` et
-  `Medium`. « Ok SmartClip » convient ; « clip » seul serait ingérable.
-- **Dépendance à Windows** : le pack de langue doit être installé. Prévoir le
-  même indicateur d'état que pour le raccourci — actif, ou raison du refus.
-- **Latence** d'environ une seconde, sans importance ici : le buffer couvre déjà
-  les dernières secondes.
+Trois décisions structurantes :
+- **Désactivé par défaut.** Écouter le micro en permanence doit rester un choix
+  explicite, jamais quelque chose qu'on découvre après coup.
+- **Confiances `High` et `Medium` seulement**, six caractères minimum. En vocal
+  ou en pleine partie, un déclenchement intempestif coûte plus cher qu'une
+  phrase à répéter.
+- **État affiché dans les réglages**, comme pour le raccourci : le pack de
+  langue peut manquer, et le silence serait pire que l'absence de fonction.
 
-Les deux pièges d'API rencontrés — alimenter la contrainte par `Commands()`
-plutôt que par son constructeur, et attendre une opération asynchrone en
-interrogeant `Status()` faute de runtime async — sont consignés dans la tâche
-correspondante.
+Deux pièges d'API, pour mémoire : la contrainte se construit depuis un
+`IIterable<HSTRING>`, lui-même obtenu directement d'un `Vec` ; et les opérations
+asynchrones s'attendent en interrogeant `Status()`, le projet n'ayant pas de
+runtime async par ailleurs.
 
 ### Prévisualisation dans l'éditeur — implémentée
 
