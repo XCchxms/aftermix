@@ -30,7 +30,7 @@ tauri-plugin-single-instance = "2"
 # seulement pendant que le moteur tourne.
 [dependencies.windows]
 workspace = true
-features = ["Win32_Media_MediaFoundation"]
+features = ["Win32_Media_MediaFoundation", "Win32_System_Com"]
 
 [[bin]]
 name = "smartclip-studio"

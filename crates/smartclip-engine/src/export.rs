@@ -181,6 +181,33 @@ const THUMBNAIL_WIDTH: u32 = 480;
 ///
 /// L'image est prise un peu après le début — les toutes premières sont souvent
 /// noires, le temps que l'encodeur se cale.
+/// Crée les vignettes manquantes d'un dossier de clips.
+///
+/// Elles ne sont écrites qu'à la sauvegarde : tout clip antérieur à cette
+/// fonction garde une couverture unie, et une bibliothèque pleine paraît vide.
+/// Ce balayage rattrape l'existant.
+///
+/// Un clip illisible est simplement sauté. Interrompre le balayage priverait
+/// tous les suivants de leur vignette pour un seul fichier abîmé, et l'échec
+/// n'a rien d'urgent : la carte reste utilisable sans image.
+pub fn backfill_thumbnails(directory: &Path) -> usize {
+    let Ok(clips) = crate::library::scan(directory) else {
+        return 0;
+    };
+    let mut created = 0;
+    for clip in clips.iter().filter(|clip| clip.thumbnail.is_none()) {
+        let output = crate::library::ClipMeta::thumbnail_path(&clip.path);
+        match extract_thumbnail(&clip.path, &output) {
+            Ok(()) => created += 1,
+            Err(e) => tracing::debug!("vignette impossible pour {} : {e:#}", clip.name),
+        }
+    }
+    if created > 0 {
+        tracing::info!("{created} vignette(s) rattrapée(s)");
+    }
+    created
+}
+
 pub fn extract_thumbnail(input: &Path, output: &Path) -> Result<()> {
     let mut attributes: Option<IMFAttributes> = None;
     unsafe { MFCreateAttributes(&mut attributes, 1)? };

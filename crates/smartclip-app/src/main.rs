@@ -13,7 +13,8 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use smartclip_engine::{Config, Recorder, library};
-use windows::Win32::Media::MediaFoundation::{MF_VERSION, MFSTARTUP_FULL, MFStartup};
+use windows::Win32::Media::MediaFoundation::{MF_VERSION, MFSTARTUP_FULL, MFShutdown, MFStartup};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -401,6 +402,36 @@ fn list_clips(state: State<'_, AppState>) -> Result<Vec<ClipView>, String> {
                 .collect(),
         })
         .collect())
+}
+
+/// Rattrape les vignettes des clips antérieurs à leur introduction.
+///
+/// Lancé en fond et sans réponse : chaque extraction ouvre un pipeline Media
+/// Foundation, et attendre la fin sur une bibliothèque fournie figerait la
+/// fenêtre au démarrage. La vue est prévenue par un événement et se rafraîchit
+/// alors — c'est la seule façon de voir apparaître les images sans avoir à
+/// rouvrir l'application.
+#[tauri::command]
+fn backfill_thumbnails(app: AppHandle, state: State<'_, AppState>) {
+    let dir = PathBuf::from(&state.settings.lock().unwrap().output_dir);
+    std::thread::spawn(move || {
+        // Media Foundation tourne déjà pour l'application, mais COM s'initialise
+        // par thread : sans cela le lecteur refuse de se créer ici.
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            if MFStartup(MF_VERSION, MFSTARTUP_FULL).is_err() {
+                return;
+            }
+        }
+        let created = smartclip_engine::export::backfill_thumbnails(&dir);
+        unsafe {
+            let _ = MFShutdown();
+            CoUninitialize();
+        }
+        if created > 0 {
+            let _ = app.emit("thumbnails-ready", created);
+        }
+    });
 }
 
 #[tauri::command]
@@ -881,6 +912,7 @@ fn main() {
             set_settings,
             list_microphones,
             list_clips,
+            backfill_thumbnails,
             delete_clip,
             is_recording,
             start_recording,

@@ -811,6 +811,12 @@ listen("clip-saved", async (event) => {
 });
 listen("save-failed", (event) => toast(String(event.payload), true));
 
+// Les vignettes rattrapées apparaissent sans avoir à rouvrir l'application.
+listen("thumbnails-ready", async (event) => {
+  await loadLibrary();
+  toast(`${event.payload} aperçu(s) de clip ajouté(s)`);
+});
+
 // ── surveillance du buffer ──
 //
 // Un buffer arrêté sans que l'utilisateur le sache est le pire défaut possible :
@@ -847,6 +853,11 @@ setInterval(async () => {
   state.recording = await call("is_recording");
   renderStatus(state.recording ? await call("current_tracks") : []);
   await loadLibrary();
+
+  // Vignettes manquantes des clips antérieurs, rattrapées en fond. La grille
+  // s'affiche d'abord : attendre les extractions retarderait tout l'écran pour
+  // une amélioration cosmétique.
+  invoke("backfill_thumbnails").catch(() => {});
 
   // Démarrage automatique du buffer.
   //

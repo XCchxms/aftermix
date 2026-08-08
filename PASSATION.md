@@ -109,11 +109,7 @@ Aucun de ces points n'empêche l'usage quotidien.
    un thread à file bornée — **sans jamais toucher au rythme de la boucle**.
 4. **Plein écran exclusif**, **sortie de veille**, **NVIDIA / Intel** — non
    testés. Les MFT diffèrent nettement entre constructeurs.
-5. **Vignettes des anciens clips** — elles ne sont créées qu'à la sauvegarde.
-   Les clips antérieurs gardent une couverture unie tant qu'un balayage
-   rétroactif n'a pas été ajouté : appeler `export::extract_thumbnail` sur tout
-   clip dont le `.png` manque, au premier chargement de la bibliothèque.
-6. **Marqueur rétroactif** — idée retenue, non commencée. Poser un repère
+5. **Marqueur rétroactif** — idée retenue, non commencée. Poser un repère
    pendant la partie sans rien enregistrer, puis extraire les moments marqués en
    fin de session. Le buffer contient déjà tout.
 

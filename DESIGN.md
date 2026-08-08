@@ -143,9 +143,10 @@ la lecture dans l'éditeur.
 Le fond reste neutre tant qu'elle n'est pas prête. Une couleur vive qui
 disparaîtrait ensuite ferait clignoter la grille au chargement.
 
-⚠️ Les clips antérieurs à cette fonction gardent une couverture unie : les
-vignettes ne sont créées qu'à la sauvegarde, et aucun balayage rétroactif
-n'existe encore.
+Les clips antérieurs à cette fonction sont **rattrapés au lancement**, en fond :
+la grille s'affiche d'abord, les images apparaissent ensuite. Mesuré sur
+30 clips, moins de 30 s pour la totalité. Attendre la fin figerait la fenêtre au
+démarrage pour une amélioration purement visuelle.
 
 ## Rien ne doit pouvoir pousser l'interface hors du cadre
 
@@ -170,5 +171,4 @@ Trois paliers, pas plus :
 
 ## Ce qui reste à faire
 
-- **Vignettes rétroactives** pour les clips antérieurs à la fonction.
 - Mode clair, si un usage hors jeu le justifie un jour.
