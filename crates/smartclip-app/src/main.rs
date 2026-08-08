@@ -72,10 +72,53 @@ struct Settings {
     /// Lance l'application à l'ouverture de session Windows.
     #[serde(default)]
     launch_at_login: bool,
+    /// Enregistre le micro sur sa piste.
+    #[serde(default = "yes")]
+    capture_microphone: bool,
+    /// Identifiant du micro choisi. Vide = celui de Windows.
+    ///
+    /// C'est l'identifiant et non le nom qui est mémorisé : un pilote renomme
+    /// son périphérique à la moindre mise à jour, et le réglage serait perdu.
+    #[serde(default)]
+    microphone: String,
+    /// Compromis qualité / disque : `haute`, `equilibree` ou `legere`.
+    #[serde(default = "default_quality")]
+    quality: String,
+    /// Plafond disque du buffer, en gigaoctets.
+    ///
+    /// Il borne l'anneau **en plus** de la durée. Ce n'est pas une redondance :
+    /// l'encodeur matériel dépasse largement le débit demandé, et la durée seule
+    /// ne borne donc rien.
+    #[serde(default = "default_disk")]
+    max_gigabytes: f64,
+    /// Affiche la pastille de confirmation par-dessus le jeu.
+    #[serde(default = "yes")]
+    overlay: bool,
 }
 
 fn yes() -> bool {
     true
+}
+
+fn default_quality() -> String {
+    "haute".to_string()
+}
+
+fn default_disk() -> f64 {
+    3.0
+}
+
+/// Résolution du compromis qualité en réglages d'encodeur.
+///
+/// Trois choix, pas davantage : au-delà, l'utilisateur arbitre entre des
+/// chiffres qui ne lui disent rien. La définition n'est jamais réduite — un clip
+/// à 1080p reste ce qu'on veut partager, c'est le débit qui cède.
+fn quality_settings(quality: &str) -> (u32, u32) {
+    match quality {
+        "legere" => (30, 8_000_000),
+        "equilibree" => (60, 12_000_000),
+        _ => (60, 20_000_000),
+    }
 }
 
 fn default_hotkey() -> String {
@@ -96,6 +139,11 @@ impl Default for Settings {
             voice_phrase: String::new(),
             auto_start: true,
             launch_at_login: false,
+            capture_microphone: true,
+            microphone: String::new(),
+            quality: default_quality(),
+            max_gigabytes: default_disk(),
+            overlay: true,
         }
     }
 }
@@ -318,6 +366,17 @@ fn set_settings(
     Ok(())
 }
 
+/// Micros disponibles, pour le choix dans les réglages.
+///
+/// L'énumération se fait à chaque ouverture du panneau plutôt qu'au démarrage :
+/// on branche et débranche un casque en cours de session, et une liste figée
+/// proposerait des périphériques absents tout en cachant celui qu'on vient de
+/// connecter.
+#[tauri::command]
+fn list_microphones() -> Result<Vec<smartclip_engine::audio::InputDevice>, String> {
+    smartclip_engine::audio::list_inputs().map_err(|e| format!("{e:#}"))
+}
+
 #[tauri::command]
 fn list_clips(state: State<'_, AppState>) -> Result<Vec<ClipView>, String> {
     let dir = PathBuf::from(&state.settings.lock().unwrap().output_dir);
@@ -361,8 +420,16 @@ fn start_recording(state: State<'_, AppState>) -> Result<Vec<String>, String> {
         return Ok(recorder.tracks());
     }
     let settings = state.settings.lock().unwrap().clone();
+    let (fps, bitrate) = quality_settings(&settings.quality);
     let config = Config {
         buffer_seconds: settings.buffer_seconds,
+        fps,
+        bitrate,
+        // Plancher à 1 Go : en dessous, le plafond tronquerait le buffer avant
+        // même la durée la plus courte, et l'utilisateur croirait à une panne.
+        max_bytes: (settings.max_gigabytes.max(1.0) * 1024.0 * 1024.0 * 1024.0) as u64,
+        capture_microphone: settings.capture_microphone,
+        microphone: Some(settings.microphone.clone()).filter(|id| !id.is_empty()),
         ..Config::default()
     };
     let recorder = Recorder::start(config).map_err(|e| format!("{e:#}"))?;
@@ -665,6 +732,12 @@ fn notify_kind(app: &AppHandle, title: &str, body: &str, error: bool) {
 const OVERLAY_MS: u64 = 2_600;
 
 fn flash_overlay(app: &AppHandle, title: &str, body: &str, error: bool) {
+    // L'échec reste toujours affiché, même pastille désactivée : refuser une
+    // confirmation est un choix, ne pas savoir qu'un clip a été perdu n'en est
+    // pas un.
+    if !error && !app.state::<AppState>().settings.lock().unwrap().overlay {
+        return;
+    }
     let Some(window) = app.get_webview_window("overlay") else {
         return;
     };
@@ -806,6 +879,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_settings,
             set_settings,
+            list_microphones,
             list_clips,
             delete_clip,
             is_recording,

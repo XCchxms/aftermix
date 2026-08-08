@@ -455,18 +455,25 @@ fn run(
 
     // Le micro occupe le dernier emplacement : il est toujours présent, et le
     // réserver en fin de table laisse les premiers aux applications.
+    //
+    // L'emplacement reste réservé même micro coupé. Le libérer aux applications
+    // changerait la structure des flux d'une session à l'autre, et rebrancher un
+    // micro exigerait de vider le buffer.
     let mic_index = config.track_slots - 1;
-    attach(
-        &mut slots,
-        mic_index,
-        Source {
-            label: "Micro".to_string(),
-            process: String::new(),
-            pid: None,
-        },
-        &clock,
-        &audio_senders,
-    );
+    if config.capture_microphone {
+        attach(
+            &mut slots,
+            mic_index,
+            Source {
+                label: "Micro".to_string(),
+                process: String::new(),
+                pid: None,
+                device: config.microphone.clone(),
+            },
+            &clock,
+            &audio_senders,
+        );
+    }
 
     for source in audio::discover(config.max_sources)? {
         let Some(index) = slots.free_index().filter(|i| *i != mic_index) else {
@@ -676,7 +683,7 @@ fn run(
                 // réessayer à chaque rotation lancerait un thread toutes les
                 // deux secondes pour rien.
                 mic_retry = mic_retry.saturating_sub(1);
-                if !slots.is_active(mic_index) && mic_retry == 0 {
+                if config.capture_microphone && !slots.is_active(mic_index) && mic_retry == 0 {
                     mic_retry = MIC_RETRY_ROTATIONS;
                     attach(
                         &mut slots,
@@ -685,6 +692,7 @@ fn run(
                             label: "Micro".to_string(),
                             process: String::new(),
                             pid: None,
+                            device: config.microphone.clone(),
                         },
                         &clock,
                         &audio_senders,
@@ -848,11 +856,12 @@ fn attach(
     let stop = Arc::new(AtomicBool::new(false));
     let alive = Arc::new(AtomicBool::new(true));
     let (clock, tx, pid) = (clock.clone(), sender.clone(), source.pid);
+    let device = source.device.clone();
     let (thread_stop, thread_alive) = (Arc::clone(&stop), Arc::clone(&alive));
     // Les threads de capture ne sont pas conservés : ils s'arrêtent sur leur
     // propre drapeau et signalent leur fin par `alive`.
     std::thread::spawn(move || {
-        audio::capture_source(index, pid, clock, thread_stop, thread_alive, tx)
+        audio::capture_source(index, pid, device, clock, thread_stop, thread_alive, tx)
     });
     tracing::info!("piste {index} : {}", source.label);
     slots.slots[index] = Some(Slot {

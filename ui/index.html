@@ -10,21 +10,50 @@
     <header>
       <button class="btn ghost hidden" id="back">← Bibliothèque</button>
       <div class="brand">
-        <span class="brand-mark"><i></i><i></i><i></i></span>
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
         SmartClip <span>Studio</span>
       </div>
       <div class="spacer"></div>
-      <div class="status" id="status"><span class="dot"></span><span id="statusText">Buffer arrêté</span></div>
-      <button class="btn ghost" id="settings" title="Réglages">⚙</button>
+      <div class="status" id="status" role="status">
+        <span class="dot" aria-hidden="true"></span><span id="statusText">Buffer arrêté</span>
+      </div>
+      <button class="btn ghost icon" id="settings" title="Réglages" aria-label="Réglages">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+      </button>
       <button class="btn" id="toggle">Démarrer le buffer</button>
       <button class="btn primary" id="save" disabled>Sauvegarder</button>
     </header>
 
     <main>
       <section id="libraryView">
+        <!-- Bandeau de bibliothèque : ce que contient le dossier, et de quoi
+             retrouver un clip sans le parcourir des yeux. -->
+        <div class="library-bar" id="libraryBar">
+          <div class="library-count">
+            <strong id="clipCount">0 clip</strong>
+            <span id="clipSize"></span>
+          </div>
+          <div class="spacer"></div>
+          <div class="search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input type="search" id="search" placeholder="Rechercher un clip" aria-label="Rechercher un clip" spellcheck="false" />
+          </div>
+          <div class="segmented" id="sort" role="group" aria-label="Trier les clips">
+            <button data-sort="recent" class="active">Récents</button>
+            <button data-sort="long">Durée</button>
+            <button data-sort="heavy">Taille</button>
+          </div>
+        </div>
+
         <div class="grid" id="grid"></div>
+
+        <div class="empty hidden" id="noMatch">
+          <strong>Aucun clip ne correspond</strong>
+          <div>Essaie un autre mot, ou vide la recherche.</div>
+        </div>
+
         <div class="empty hidden" id="empty">
-          <div class="empty-mark">
+          <div class="empty-mark" aria-hidden="true">
             <span></span><span></span><span></span>
           </div>
           <strong>Les dernières minutes sont gardées en mémoire</strong>
@@ -52,7 +81,7 @@
             <div id="tracks"></div>
             <div class="panel-actions">
               <button class="btn" id="autoMix" style="width:100%" disabled>
-                ✨ Équilibrer automatiquement
+                Équilibrer automatiquement
               </button>
               <div style="margin-top:8px; display:flex; gap:8px">
                 <button class="btn primary" id="export" style="flex:1">Exporter</button>
@@ -66,42 +95,146 @@
   </div>
 
   <div class="overlay hidden" id="settingsPanel">
-    <div class="dialog">
-      <h2>Réglages</h2>
-
-      <label>Durée conservée en arrière</label>
-      <div class="choices" id="bufferChoices">
-        <button data-seconds="30">30 s</button>
-        <button data-seconds="60">1 min</button>
-        <button data-seconds="180">3 min</button>
-        <button data-seconds="300">5 min</button>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="dialog-head">
+        <h2 id="settingsTitle">Réglages</h2>
+        <p>Le raccourci et l'écoute prennent effet aussitôt ; la capture redémarre le buffer.</p>
       </div>
-      <div class="hint" id="bufferHint"></div>
 
-      <label>Dossier des clips</label>
-      <input type="text" id="outputDir" spellcheck="false" />
+      <div class="tabs" role="tablist" aria-label="Sections des réglages">
+        <button role="tab" data-tab="capture" aria-selected="true" aria-controls="tab-capture" id="tabbtn-capture">Capture</button>
+        <button role="tab" data-tab="audio" aria-selected="false" aria-controls="tab-audio" id="tabbtn-audio" tabindex="-1">Audio</button>
+        <button role="tab" data-tab="declencheurs" aria-selected="false" aria-controls="tab-declencheurs" id="tabbtn-declencheurs" tabindex="-1">Déclencheurs</button>
+        <button role="tab" data-tab="general" aria-selected="false" aria-controls="tab-general" id="tabbtn-general" tabindex="-1">Général</button>
+      </div>
 
-      <label>Raccourci de sauvegarde</label>
-      <input type="text" id="hotkey" spellcheck="false" placeholder="Ctrl+Shift+X" />
-      <div class="hint" id="hotkeyState"></div>
+      <div class="tab-body">
+        <section role="tabpanel" id="tab-capture" aria-labelledby="tabbtn-capture" data-panel="capture">
+          <div class="field block">
+            <span class="field-name" id="bufferLabel">Durée conservée en arrière</span>
+            <span class="field-note">Ce que le raccourci sauvegarde quand tu l'appuies.</span>
+            <div class="segmented wide" id="bufferChoices" role="group" aria-labelledby="bufferLabel">
+              <button data-seconds="30">30 s</button>
+              <button data-seconds="60">1 min</button>
+              <button data-seconds="180">3 min</button>
+              <button data-seconds="300">5 min</button>
+            </div>
+          </div>
 
-      <label>Phrase d'activation vocale <span class="optional">— facultatif</span></label>
-      <input type="text" id="voicePhrase" spellcheck="false" placeholder="ok smartclip" />
-      <div class="hint" id="voiceState"></div>
+          <div class="field block">
+            <span class="field-name" id="qualityLabel">Qualité vidéo</span>
+            <span class="field-note">La définition ne change jamais : c'est le débit qui cède.</span>
+            <div class="segmented wide" id="qualityChoices" role="group" aria-labelledby="qualityLabel">
+              <button data-quality="haute">Haute · 60 fps</button>
+              <button data-quality="equilibree">Équilibrée · 60 fps</button>
+              <button data-quality="legere">Légère · 30 fps</button>
+            </div>
+          </div>
 
-      <label>Démarrage</label>
-      <label class="check">
-        <input type="checkbox" id="autoStart" />
-        <span>Lancer le buffer à l'ouverture de l'application</span>
-      </label>
-      <label class="check">
-        <input type="checkbox" id="launchAtLogin" />
-        <span>Lancer SmartClip au démarrage de Windows</span>
-      </label>
+          <div class="field block">
+            <span class="field-name"><label for="diskCap">Plafond disque</label></span>
+            <span class="field-note">
+              L'encodeur matériel dépasse le débit demandé : sans plafond en
+              octets, la durée seule ne borne rien.
+            </span>
+            <div class="range-row">
+              <input type="range" id="diskCap" min="1" max="12" step="0.5" />
+              <output id="diskCapValue" for="diskCap">3 Go</output>
+            </div>
+          </div>
 
-      <div class="hint">
-        Le raccourci fonctionne même fenêtre fermée. Fermer la fenêtre laisse le
-        buffer tourner ; on quitte par la barre système.
+          <div class="callout" id="bufferHint"></div>
+        </section>
+
+        <section role="tabpanel" id="tab-audio" aria-labelledby="tabbtn-audio" data-panel="audio" hidden>
+          <div class="field">
+            <div class="field-text">
+              <span class="field-name">Enregistrer le micro</span>
+              <span class="field-note">Sa propre piste, réglable après coup comme les autres.</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="captureMic" aria-label="Enregistrer le micro" />
+              <span aria-hidden="true"></span>
+            </label>
+          </div>
+
+          <div class="field block" id="micField">
+            <span class="field-name"><label for="microphone">Micro utilisé</label></span>
+            <span class="field-note">Celui de Windows par défaut. Un casque branché apparaît ici.</span>
+            <select id="microphone"></select>
+            <div class="hint" id="micState"></div>
+          </div>
+
+          <div class="callout">
+            <b>Les autres pistes se découvrent seules.</b>
+            Chaque application qui joue du son prend un emplacement — jeu,
+            Discord, navigateur — et rien n'est à déclarer.
+          </div>
+        </section>
+
+        <section role="tabpanel" id="tab-declencheurs" aria-labelledby="tabbtn-declencheurs" data-panel="declencheurs" hidden>
+          <div class="field block">
+            <span class="field-name"><label for="hotkey">Raccourci de sauvegarde</label></span>
+            <span class="field-note">Fonctionne fenêtre fermée, pendant une partie.</span>
+            <input type="text" id="hotkey" spellcheck="false" placeholder="Ctrl+Shift+X" />
+            <div class="hint" id="hotkeyState"></div>
+          </div>
+
+          <div class="field block">
+            <span class="field-name">
+              <label for="voicePhrase">Phrase d'activation vocale</label>
+              <span class="optional">facultatif</span>
+            </span>
+            <span class="field-note">Dis la phrase, le clip part. Laisse vide pour ne pas écouter le micro.</span>
+            <input type="text" id="voicePhrase" spellcheck="false" placeholder="ok smartclip" />
+            <div class="hint" id="voiceState"></div>
+          </div>
+
+          <div class="field">
+            <div class="field-text">
+              <span class="field-name">Pastille de confirmation</span>
+              <span class="field-note">S'affiche par-dessus le jeu à chaque clip. Les échecs restent toujours signalés.</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="overlayBadge" aria-label="Pastille de confirmation" />
+              <span aria-hidden="true"></span>
+            </label>
+          </div>
+        </section>
+
+        <section role="tabpanel" id="tab-general" aria-labelledby="tabbtn-general" data-panel="general" hidden>
+          <div class="field block">
+            <span class="field-name"><label for="outputDir">Dossier des clips</label></span>
+            <input type="text" id="outputDir" spellcheck="false" />
+          </div>
+
+          <div class="field">
+            <div class="field-text">
+              <span class="field-name">Lancer le buffer à l'ouverture</span>
+              <span class="field-note">Un clip manqué faute d'avoir démarré ne se rattrape pas.</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="autoStart" aria-label="Lancer le buffer à l'ouverture" />
+              <span aria-hidden="true"></span>
+            </label>
+          </div>
+
+          <div class="field">
+            <div class="field-text">
+              <span class="field-name">Lancer au démarrage de Windows</span>
+              <span class="field-note">SmartClip démarre en fond, dans la barre système.</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="launchAtLogin" aria-label="Lancer au démarrage de Windows" />
+              <span aria-hidden="true"></span>
+            </label>
+          </div>
+
+          <div class="callout">
+            Fermer la fenêtre laisse le buffer tourner. On quitte réellement par
+            la barre système.
+          </div>
+        </section>
       </div>
 
       <div class="dialog-actions">
@@ -111,7 +244,7 @@
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="app.js"></script>
 </body>
 </html>

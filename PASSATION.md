@@ -6,7 +6,13 @@ pas défaire. Le détail technique complet est dans [README.md](README.md), les
 règles visuelles dans [DESIGN.md](DESIGN.md).
 
 État au **08/08/2026** : application complète, validée à l'usage par
-l'utilisateur. 24 commits, build vert, 24 tests.
+l'utilisateur. Build vert, 21 tests.
+
+Les réglages sont détaillés dans le [README](README.md#les-réglages) : onze
+entrées en quatre onglets, dont le choix du micro, la qualité vidéo et le
+plafond disque. Quatre d'entre elles — durée, qualité, plafond, micro — sont
+fixées à l'ouverture de la capture et redémarrent le buffer quand elles
+changent.
 
 ---
 
@@ -128,6 +134,10 @@ cargo run --release --bin smartclip -- probe "chemin\clip.mp4"
 # permet de compter les discontinuités qui trahissent un grésillement.
 cargo run --release --bin smartclip -- tracks "chemin\clip.mp4"
 
+# Micros que l'interface propose au choix. Distingue un pilote muet d'un
+# réglage mal appliqué, sans ouvrir l'application.
+cargo run --release --bin smartclip -- mics
+
 # Campagne d'endurance : mémoire, erreurs, redémarrages, sauvegardes.
 cargo run --release --bin smartclip -- --buffer 60 --duration 1800
 ```
@@ -189,6 +199,9 @@ Chacune a coûté une session de diagnostic. Le détail est dans le README, sect
 | Audio et vidéo **entrelacés** à l'écriture | le muxeur bloque si un flux prend trop d'avance |
 | Media Foundation démarré **au lancement de l'application** | sinon `MF_E_SHUTDOWN` dès qu'on ouvre un clip sans avoir démarré le buffer |
 | **Une seule instance** | deux applications, ce sont deux buffers capturant le même écran |
+| Emplacement du micro **réservé même micro coupé** | le libérer aux applications changerait la structure des flux d'une session à l'autre, et rebrancher un micro exigerait de vider le buffer |
+| Micro mémorisé par **identifiant**, pas par nom | un pilote renomme son périphérique à chaque mise à jour, et le réglage serait perdu |
+| Énumération des micros sur **son propre thread MTA** | l'appelant est le thread de l'interface, dont le modèle COM appartient au webview |
 
 ---
 

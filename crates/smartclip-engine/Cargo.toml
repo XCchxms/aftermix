@@ -28,6 +28,8 @@ features = [
     "Media_SpeechRecognition",
     "Graphics_Capture",
     "Graphics_DirectX_Direct3D11",
+    # PKEY_Device_FriendlyName : le nom lisible d'un périphérique audio.
+    "Win32_Devices_FunctionDiscovery",
     "Win32_Foundation",
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D11",
@@ -48,5 +50,7 @@ features = [
     "Win32_System_WinRT_Direct3D11",
     "Win32_System_WinRT_Graphics_Capture",
     "Win32_UI_Input_KeyboardAndMouse",
+    # IPropertyStore, pour lire le nom d'un périphérique audio.
+    "Win32_UI_Shell_PropertiesSystem",
     "Win32_UI_WindowsAndMessaging",
 ]

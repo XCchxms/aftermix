@@ -11,25 +11,26 @@ use std::sync::mpsc::{SyncSender, TrySendError};
 
 use anyhow::{Context, Result, bail};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
+use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Media::Audio::{
     AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_LOOPBACK,
     AUDIOCLIENT_ACTIVATION_PARAMS, AUDIOCLIENT_ACTIVATION_PARAMS_0,
     AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK, AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS,
-    ActivateAudioInterfaceAsync, IActivateAudioInterfaceAsyncOperation,
+    ActivateAudioInterfaceAsync, DEVICE_STATE_ACTIVE, IActivateAudioInterfaceAsyncOperation,
     IActivateAudioInterfaceCompletionHandler, IActivateAudioInterfaceCompletionHandler_Impl,
     IAudioCaptureClient, IAudioClient, IAudioSessionControl2, IAudioSessionManager2, IMMDevice,
     IMMDeviceEnumerator, MMDeviceEnumerator, PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
     VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, WAVEFORMATEX, eCapture, eConsole, eRender,
 };
-use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
+use windows::Win32::System::Com::StructuredStorage::{PROPVARIANT, PropVariantClear};
 use windows::Win32::System::Com::{
-    CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
+    CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, STGM_READ,
 };
 use windows::Win32::System::Threading::{
     CreateEventW, GetCurrentProcessId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
     QueryFullProcessImageNameW, WaitForSingleObject,
 };
-use windows::Win32::System::Variant::VT_BLOB;
+use windows::Win32::System::Variant::{VT_BLOB, VT_LPWSTR};
 use windows::core::{Interface, PCWSTR, PWSTR, Ref, implement};
 
 use smartclip_core::clock::{MasterClock, QpcInstant};
@@ -60,6 +61,96 @@ pub struct Source {
     pub process: String,
     /// `None` pour le micro, qui se capture par le chemin WASAPI classique.
     pub pid: Option<u32>,
+    /// Identifiant du périphérique d'entrée, pour le micro uniquement.
+    /// `None` prend celui que Windows désigne comme périphérique par défaut.
+    pub device: Option<String>,
+}
+
+/// Un périphérique d'entrée, tel que l'interface le propose au choix.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct InputDevice {
+    /// Identifiant stable entre deux sessions, contrairement au nom affiché
+    /// qu'un pilote peut changer à une mise à jour.
+    pub id: String,
+    pub name: String,
+    /// Vrai pour celui que Windows utiliserait sans consigne de notre part.
+    pub default: bool,
+}
+
+/// Énumère les micros branchés et actifs.
+///
+/// Windows liste aussi les périphériques débranchés ou désactivés ; les
+/// proposer au choix reviendrait à offrir des pistes qui resteront muettes.
+///
+/// L'énumération part sur son propre thread cloisonné en MTA. L'appelant est
+/// ici le thread de l'interface, dont le modèle COM appartient au webview : y
+/// créer des objets audio marcherait peut-être, et c'est exactement le genre de
+/// « peut-être » qui produit un plantage chez quelqu'un d'autre.
+pub fn list_inputs() -> Result<Vec<InputDevice>> {
+    std::thread::spawn(|| {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        enumerate_inputs()
+    })
+    .join()
+    .map_err(|_| anyhow::anyhow!("l'énumération des micros a échoué"))?
+}
+
+fn enumerate_inputs() -> Result<Vec<InputDevice>> {
+    unsafe {
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+        // Le périphérique par défaut peut manquer — machine sans micro. Ce n'est
+        // pas une erreur : la liste est alors simplement vide ou sans défaut.
+        let default_id = enumerator
+            .GetDefaultAudioEndpoint(eCapture, eConsole)
+            .ok()
+            .and_then(|device| device_id(&device));
+
+        let collection = enumerator.EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE)?;
+        let mut devices = Vec::new();
+        for index in 0..collection.GetCount()? {
+            let Ok(device) = collection.Item(index) else {
+                continue;
+            };
+            let Some(id) = device_id(&device) else {
+                continue;
+            };
+            let name = device_name(&device).unwrap_or_else(|| "Micro".to_string());
+            devices.push(InputDevice {
+                default: Some(&id) == default_id.as_ref(),
+                id,
+                name,
+            });
+        }
+        // Le périphérique par défaut en tête : c'est celui que l'utilisateur
+        // cherche neuf fois sur dix.
+        devices.sort_by_key(|device| !device.default);
+        Ok(devices)
+    }
+}
+
+fn device_id(device: &IMMDevice) -> Option<String> {
+    unsafe {
+        let raw = device.GetId().ok()?;
+        let id = raw.to_string().ok();
+        windows::Win32::System::Com::CoTaskMemFree(Some(raw.0 as *const _));
+        id
+    }
+}
+
+fn device_name(device: &IMMDevice) -> Option<String> {
+    unsafe {
+        let store = device.OpenPropertyStore(STGM_READ).ok()?;
+        let mut value = store.GetValue(&PKEY_Device_FriendlyName).ok()?;
+        let inner = &value.Anonymous.Anonymous;
+        let name = (inner.vt == VT_LPWSTR)
+            .then(|| inner.Anonymous.pwszVal.to_string().ok())
+            .flatten();
+        let _ = PropVariantClear(&mut value);
+        name
+    }
 }
 
 /// Utilitaires qui ouvrent une session audio sans jamais produire de son utile :
@@ -157,6 +248,7 @@ pub fn discover(max: usize) -> Result<Vec<Source>> {
                 label: classify(&process).to_string(),
                 process,
                 pid: Some(pid),
+                device: None,
             });
         }
         disambiguate(&mut found);
@@ -277,13 +369,32 @@ fn activate_process_loopback(pid: u32) -> Result<IAudioClient> {
     }
 }
 
-fn activate_microphone() -> Result<IAudioClient> {
+/// Ouvre le micro demandé, ou celui de Windows à défaut.
+///
+/// Le repli est indispensable : le périphérique choisi dans les réglages peut
+/// avoir été débranché depuis, et perdre la piste voix pour cette raison serait
+/// le pire des comportements. L'interface signale de son côté qu'un micro
+/// enregistré a disparu de la liste.
+fn activate_microphone(id: Option<&str>) -> Result<IAudioClient> {
     unsafe {
         let enumerator: IMMDeviceEnumerator =
             CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-        let device: IMMDevice = enumerator
-            .GetDefaultAudioEndpoint(eCapture, eConsole)
-            .context("aucun périphérique d'entrée par défaut")?;
+        let chosen: Option<IMMDevice> = id.filter(|id| !id.is_empty()).and_then(|id| {
+            let wide: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
+            match enumerator.GetDevice(PCWSTR(wide.as_ptr())) {
+                Ok(device) => Some(device),
+                Err(e) => {
+                    tracing::warn!("micro « {id} » indisponible ({e}) : repli sur celui de Windows");
+                    None
+                }
+            }
+        });
+        let device = match chosen {
+            Some(device) => device,
+            None => enumerator
+                .GetDefaultAudioEndpoint(eCapture, eConsole)
+                .context("aucun périphérique d'entrée par défaut")?,
+        };
         Ok(device.Activate(CLSCTX_ALL, None)?)
     }
 }
@@ -297,6 +408,8 @@ fn activate_microphone() -> Result<IAudioClient> {
 pub fn capture_source(
     track: usize,
     pid: Option<u32>,
+    // Périphérique d'entrée à ouvrir quand `pid` est `None`.
+    device: Option<String>,
     clock: MasterClock,
     stop: Arc<AtomicBool>,
     alive: Arc<AtomicBool>,
@@ -332,7 +445,7 @@ pub fn capture_source(
 
         let (client, loopback) = match pid {
             Some(pid) => (activate_process_loopback(pid)?, true),
-            None => (activate_microphone()?, false),
+            None => (activate_microphone(device.as_deref())?, false),
         };
         let mut flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK;
         if loopback {
@@ -418,6 +531,7 @@ mod tests {
             label: classify(process).to_string(),
             process: process.to_string(),
             pid: Some(1),
+            device: None,
         }
     }
 

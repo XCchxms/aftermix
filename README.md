@@ -121,10 +121,50 @@ dans le moteur de rendu du jeu, précisément ce que le projet s'interdit pour n
 pas éveiller les anti-cheat. Les jeux en plein écran fenêtré, largement
 majoritaires, ne sont pas concernés.
 
-Les réglages (⚙) proposent 30 s, 1 min, 3 min ou 5 min de buffer et le dossier
-des clips ; ils sont conservés dans `%APPDATA%\SmartClip\settings.json`. Changer la durée pendant que le buffer tourne le redémarre : elle est
-fixée à l'ouverture de la capture, et sans redémarrage le réglage ne prendrait
-effet qu'à la session suivante.
+### Les réglages
+
+Conservés dans `%APPDATA%\SmartClip\settings.json`, répartis en quatre onglets.
+Un fichier illisible ne bloque pas le démarrage : chaque champ manquant reprend
+sa valeur par défaut plutôt que de refuser d'ouvrir l'application.
+
+| Onglet | Réglage | Clé | Défaut |
+|---|---|---|---|
+| Capture | Durée conservée | `buffer_seconds` | 60 |
+| Capture | Qualité vidéo | `quality` | `haute` |
+| Capture | Plafond disque (Go) | `max_gigabytes` | 3 |
+| Audio | Enregistrer le micro | `capture_microphone` | vrai |
+| Audio | Micro utilisé | `microphone` | vide = celui de Windows |
+| Déclencheurs | Raccourci | `hotkey` | `Ctrl+Shift+X` |
+| Déclencheurs | Phrase vocale | `voice_phrase` | vide = écoute coupée |
+| Déclencheurs | Pastille en jeu | `overlay` | vrai |
+| Général | Dossier des clips | `output_dir` | `%USERPROFILE%\Videos\SmartClip` |
+| Général | Buffer à l'ouverture | `auto_start` | vrai |
+| Général | Lancement Windows | `launch_at_login` | faux |
+
+**Qualité** ne touche jamais à la définition — un clip 1080p reste ce qu'on veut
+partager. C'est le débit qui cède : `haute` 60 fps / 20 Mb/s, `equilibree`
+60 fps / 12 Mb/s, `legere` 30 fps / 8 Mb/s, soit ~5,3, ~3,2 et ~2,1 Mo/s
+réellement écrits. Ces chiffres sont mesurés et non calculés : le MFT matériel
+AMD produit couramment le double de sa consigne.
+
+**Le plafond disque** borne l'anneau en octets, en plus de la durée. Ce n'est pas
+une redondance mais la seule borne effective, pour la raison ci-dessus. Le
+panneau prévient quand il tronquera le buffer avant la durée demandée — sans
+cela, on croirait couvrir cinq minutes alors que deux sont gardées.
+
+**Le micro** est mémorisé par son identifiant, jamais par son nom : un pilote
+renomme son périphérique à la moindre mise à jour. S'il a été débranché depuis,
+le moteur se replie sur celui de Windows et le panneau le dit. La liste est
+relue à chaque ouverture, car on branche un casque en cours de session.
+
+Durée, qualité, plafond et micro sont fixés à l'ouverture de la capture :
+les changer pendant que le buffer tourne le redémarre, sans quoi le réglage ne
+prendrait effet qu'à la session suivante.
+
+```bash
+# Ce que l'interface propose au choix, sans avoir à l'ouvrir.
+cargo run --release --bin smartclip -- mics
+```
 
 L'écoute en direct est le cœur de l'expérience : bouger un fader pendant la
 lecture s'entend immédiatement, sans exporter. Le webview ne sachant lire qu'une

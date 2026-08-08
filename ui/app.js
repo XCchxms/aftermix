@@ -98,11 +98,48 @@ async function saveClip() {
 
 // ─────────────────────────────── bibliothèque ──────────────────────────────
 
+/// Clips tels que le moteur les a rendus, avant recherche et tri.
+let library = [];
+let query = "";
+let sortMode = "recent";
+
+const SORTS = {
+  recent: (a, b) => b.created - a.created,
+  long: (a, b) => b.seconds - a.seconds,
+  heavy: (a, b) => b.megabytes - a.megabytes,
+};
+
 async function loadLibrary() {
-  const clips = await call("list_clips");
+  library = await call("list_clips");
+  renderLibrary();
+}
+
+/// Applique recherche et tri, puis reconstruit la grille.
+///
+/// La recherche porte aussi sur les libellés de pistes : « discord » retrouve
+/// les clips où l'on parlait, ce qu'un nom de fichier horodaté ne dira jamais.
+function renderLibrary() {
+  const needle = query.trim().toLowerCase();
+  const clips = library
+    .filter(
+      (clip) =>
+        needle === "" ||
+        clip.name.toLowerCase().includes(needle) ||
+        clip.tracks.some((track) => track.label.toLowerCase().includes(needle)),
+    )
+    .sort(SORTS[sortMode] ?? SORTS.recent);
+
+  const total = library.reduce((sum, clip) => sum + clip.megabytes, 0);
+  el("clipCount").textContent =
+    `${library.length} clip${library.length > 1 ? "s" : ""}`;
+  el("clipSize").textContent = library.length === 0 ? "" : space(total / 1024);
+
+  el("libraryBar").classList.toggle("hidden", library.length === 0);
+  el("empty").classList.toggle("hidden", library.length > 0);
+  el("noMatch").classList.toggle("hidden", library.length === 0 || clips.length > 0);
+
   const grid = el("grid");
   grid.innerHTML = "";
-  el("empty").classList.toggle("hidden", clips.length > 0);
 
   clips.forEach((clip, position) => {
     const card = document.createElement("div");
@@ -439,19 +476,97 @@ async function closeEditor() {
 // ─────────────────────────────── réglages ──────────────────────────────────
 
 let draftBuffer = 60;
+let draftQuality = "haute";
+/// Élément qui avait le focus avant l'ouverture, pour le lui rendre en sortant.
+let focusBeforeSettings = null;
 
 async function openSettings() {
   const settings = await call("get_settings");
   draftBuffer = settings.buffer_seconds;
+  draftQuality = settings.quality ?? "haute";
   el("outputDir").value = settings.output_dir;
   el("hotkey").value = settings.hotkey;
   el("voicePhrase").value = settings.voice_phrase ?? "";
   el("autoStart").checked = settings.auto_start ?? true;
   el("launchAtLogin").checked = settings.launch_at_login ?? false;
-  renderBufferChoices();
+  el("captureMic").checked = settings.capture_microphone ?? true;
+  el("overlayBadge").checked = settings.overlay ?? true;
+  el("diskCap").value = String(settings.max_gigabytes ?? 3);
+  // Rend aussi les choix : l'estimation de place dépend du plafond.
+  renderDiskCap();
+  await renderMicrophones(settings.microphone ?? "");
   await renderHotkeyState();
   await renderVoiceState();
+
+  focusBeforeSettings = document.activeElement;
   el("settingsPanel").classList.remove("hidden");
+  selectTab("capture");
+}
+
+function closeSettings() {
+  el("settingsPanel").classList.add("hidden");
+  // Le focus revient d'où il venait : sans cela il retombe sur le corps du
+  // document et la navigation au clavier repart du début de la page.
+  focusBeforeSettings?.focus?.();
+}
+
+/// Affiche un onglet et lui donne le focus clavier.
+function selectTab(name) {
+  for (const tab of el("settingsPanel").querySelectorAll('[role="tab"]')) {
+    const active = tab.dataset.tab === name;
+    tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
+  }
+  for (const panel of el("settingsPanel").querySelectorAll('[role="tabpanel"]')) {
+    panel.hidden = panel.dataset.panel !== name;
+  }
+}
+
+/// Remplit la liste des micros, et signale un périphérique disparu.
+///
+/// Le micro choisi peut avoir été débranché depuis le réglage. Le moteur se
+/// replie alors sur celui de Windows ; le taire donnerait une piste voix
+/// enregistrée sur un périphérique qu'on n'a pas choisi, sans explication.
+async function renderMicrophones(selected) {
+  const select = el("microphone");
+  const note = el("micState");
+  select.innerHTML = "";
+
+  const devices = await invoke("list_microphones").catch(() => null);
+  if (!devices) {
+    select.innerHTML = '<option value="">Micro par défaut de Windows</option>';
+    note.textContent = "⚠ Impossible de lire la liste des micros.";
+    note.classList.add("warn");
+    return;
+  }
+
+  const auto = document.createElement("option");
+  auto.value = "";
+  auto.textContent = devices.find((d) => d.default)
+    ? `Micro par défaut — ${devices.find((d) => d.default).name}`
+    : "Micro par défaut de Windows";
+  select.appendChild(auto);
+
+  for (const device of devices) {
+    const option = document.createElement("option");
+    option.value = device.id;
+    option.textContent = device.name;
+    select.appendChild(option);
+  }
+
+  const known = devices.some((device) => device.id === selected);
+  select.value = known ? selected : "";
+  if (selected && !known) {
+    note.textContent =
+      "⚠ Le micro choisi n'est plus connecté — celui de Windows est utilisé à la place.";
+    note.classList.add("warn");
+  } else if (devices.length === 0) {
+    note.textContent = "⚠ Aucun micro actif détecté sur cette machine.";
+    note.classList.add("warn");
+  } else {
+    note.textContent = `${devices.length} micro(s) détecté(s).`;
+    note.classList.remove("warn");
+  }
 }
 
 /// Affiche si le raccourci est réellement pris en compte par Windows.
@@ -472,18 +587,58 @@ async function renderHotkeyState() {
   node.classList.toggle("warn", !status.registered);
 }
 
-function renderBufferChoices() {
+/// Débit disque réellement mesuré, en Mo/s, par niveau de qualité.
+///
+/// Ce ne sont pas les débits demandés : l'encodeur matériel AMD produit
+/// couramment le double de sa consigne. Annoncer la théorie tromperait
+/// l'utilisateur sur la place occupée, qui est la vraie contrainte du produit.
+const DISK_RATE = { haute: 5.3, equilibree: 3.2, legere: 2.1 };
+
+function renderChoices() {
   for (const button of el("bufferChoices").children) {
     button.classList.toggle("active", Number(button.dataset.seconds) === draftBuffer);
   }
-  // Deux coûts croissent avec la durée, et l'utilisateur doit les connaître
-  // avant de choisir : le disque (~5,3 Mo/s mesurés en 1080p60) et le temps de
-  // sauvegarde, proportionnel au nombre de segments à recoller (~1,3 s par
-  // minute de buffer).
-  const gigabytes = Math.round((draftBuffer * 5.3) / 1024 * 10) / 10;
-  const saveSeconds = Math.max(0.5, (draftBuffer / 60) * 1.3).toFixed(1);
-  el("bufferHint").textContent =
-    `Environ ${gigabytes} Go de disque en continu, et ~${saveSeconds} s par sauvegarde.`;
+  for (const button of el("qualityChoices").children) {
+    button.classList.toggle("active", button.dataset.quality === draftQuality);
+  }
+
+  // Trois coûts croissent avec la durée et la qualité, et l'utilisateur doit
+  // les connaître avant de choisir : la place occupée, le temps de sauvegarde
+  // (proportionnel au nombre de segments à recoller) et le plafond disque, qui
+  // tronque le buffer s'il est trop bas.
+  const rate = DISK_RATE[draftQuality] ?? DISK_RATE.haute;
+  const gigabytes = (draftBuffer * rate) / 1024;
+  const saveSeconds = decimal(Math.max(0.5, (draftBuffer / 60) * 1.3));
+  const cap = Number(el("diskCap").value);
+
+  let text =
+    `Environ <b>${space(gigabytes)}</b> occupés en continu, ` +
+    `et ~${saveSeconds} s par sauvegarde.`;
+  if (gigabytes > cap) {
+    // Le plafond l'emporte sur la durée : le dire évite de croire qu'on couvre
+    // cinq minutes alors que le buffer en garde deux.
+    const kept = Math.round((cap * 1024) / rate);
+    text +=
+      ` <b>Le plafond de ${decimal(cap)} Go tronquera le buffer à ~${kept} s</b> —` +
+      ` monte-le, ou baisse la qualité.`;
+  }
+  el("bufferHint").innerHTML = text;
+}
+
+/// Un décimal à la française : la virgule, et pas de zéro inutile.
+const decimal = (value) =>
+  value.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
+
+/// Une taille dans l'unité où le chiffre reste parlant. « 0,3 Go » se lit moins
+/// bien que « 311 Mo ».
+const space = (gigabytes) =>
+  gigabytes < 1
+    ? `${Math.round(gigabytes * 1024)} Mo`
+    : `${decimal(gigabytes)} Go`;
+
+function renderDiskCap() {
+  el("diskCapValue").textContent = `${decimal(Number(el("diskCap").value))} Go`;
+  renderChoices();
 }
 
 /// Affiche l'état de l'écoute vocale.
@@ -516,6 +671,11 @@ async function saveSettings() {
       voice_phrase: el("voicePhrase").value.trim(),
       auto_start: el("autoStart").checked,
       launch_at_login: el("launchAtLogin").checked,
+      capture_microphone: el("captureMic").checked,
+      microphone: el("microphone").value,
+      quality: draftQuality,
+      max_gigabytes: Number(el("diskCap").value),
+      overlay: el("overlayBadge").checked,
     },
   });
   await renderVoiceState();
@@ -525,14 +685,15 @@ async function saveSettings() {
   const status = await invoke("hotkey_status").catch(() => null);
   if (status && !status.registered) {
     toast(`Raccourci non pris en compte : ${status.error}`, true);
+    selectTab("declencheurs");
     await renderHotkeyState();
     return;
   }
-  el("settingsPanel").classList.add("hidden");
+  closeSettings();
 
-  // La durée du buffer est fixée à l'ouverture de la capture : sans redémarrage
-  // le réglage ne prendrait effet qu'à la prochaine session, ce qui serait
-  // incompréhensible.
+  // Durée, qualité, plafond et micro sont tous fixés à l'ouverture de la
+  // capture : sans redémarrage ils ne prendraient effet qu'à la prochaine
+  // session, ce qui serait incompréhensible.
   if (running) {
     await call("stop_recording");
     const tracks = await call("start_recording");
@@ -589,16 +750,57 @@ el("waveform").onclick = (event) => {
   player.currentTime = ((event.clientX - bounds.left) / bounds.width) * player.duration;
 };
 
+// ── bibliothèque : recherche et tri ──
+el("search").oninput = (event) => { query = event.target.value; renderLibrary(); };
+for (const button of el("sort").children) {
+  button.onclick = () => {
+    sortMode = button.dataset.sort;
+    for (const other of el("sort").children) {
+      other.classList.toggle("active", other === button);
+    }
+    renderLibrary();
+  };
+}
+
 // ── réglages ──
 el("settings").onclick = openSettings;
-el("settingsCancel").onclick = () => el("settingsPanel").classList.add("hidden");
+el("settingsCancel").onclick = closeSettings;
 el("settingsSave").onclick = saveSettings;
 el("settingsPanel").onclick = (event) => {
-  if (event.target === el("settingsPanel")) el("settingsPanel").classList.add("hidden");
+  if (event.target === el("settingsPanel")) closeSettings();
 };
 for (const button of el("bufferChoices").children) {
-  button.onclick = () => { draftBuffer = Number(button.dataset.seconds); renderBufferChoices(); };
+  button.onclick = () => { draftBuffer = Number(button.dataset.seconds); renderChoices(); };
 }
+for (const button of el("qualityChoices").children) {
+  button.onclick = () => { draftQuality = button.dataset.quality; renderChoices(); };
+}
+el("diskCap").oninput = renderDiskCap;
+
+// Onglets : clic, et flèches gauche/droite comme l'attend un lecteur d'écran.
+const tabButtons = [...el("settingsPanel").querySelectorAll('[role="tab"]')];
+tabButtons.forEach((tab, position) => {
+  tab.onclick = () => selectTab(tab.dataset.tab);
+  tab.onkeydown = (event) => {
+    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const next = tabButtons[(position + step + tabButtons.length) % tabButtons.length];
+    selectTab(next.dataset.tab);
+    next.focus();
+  };
+});
+
+// Échap ferme ce qui est ouvert : d'abord la boîte de réglages, sinon
+// l'éditeur. Une fenêtre dont on ne sort qu'à la souris paraît toujours lourde.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (!el("settingsPanel").classList.contains("hidden")) {
+    closeSettings();
+  } else if (!el("editorView").classList.contains("hidden")) {
+    closeEditor();
+  }
+});
 
 // ── sauvegardes déclenchées hors de la vue (raccourci, barre système) ──
 listen("clip-saved", async (event) => {

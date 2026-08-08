@@ -76,6 +76,15 @@ pub struct Config {
     /// et ceux qui restent vacants sont remplis de silence — une piste déclarée
     /// mais jamais alimentée empêcherait la finalisation du segment.
     pub track_slots: usize,
+    /// Enregistre le micro sur sa piste dédiée.
+    ///
+    /// Le couper garde l'emplacement réservé et rempli de silence : la
+    /// structure des flux est identique d'un segment à l'autre, condition du
+    /// recollage, et l'utilisateur peut rebrancher son micro sans vider le
+    /// buffer.
+    pub capture_microphone: bool,
+    /// Périphérique d'entrée à utiliser. `None` = celui de Windows.
+    pub microphone: Option<String>,
     /// Dossier des segments en cours. Purgé au démarrage.
     pub workdir: std::path::PathBuf,
 }
@@ -92,6 +101,8 @@ impl Default for Config {
             // 4 applications + le micro, plus un emplacement d'avance pour une
             // application lancée après le démarrage.
             track_slots: 6,
+            capture_microphone: true,
+            microphone: None,
             workdir: std::env::temp_dir().join("smartclip"),
         }
     }

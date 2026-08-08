@@ -366,6 +366,18 @@ fn main() -> Result<()> {
             raw.next();
             return run_mix(raw);
         }
+        // Liste les micros que l'interface propose au choix.
+        //
+        // Un périphérique absent de cette liste ne sera jamais enregistré : la
+        // vérifier ici distingue un pilote muet d'un réglage mal appliqué, sans
+        // avoir à ouvrir l'application.
+        Some("mics") => {
+            for device in smartclip_engine::audio::list_inputs()? {
+                let mark = if device.default { "*" } else { " " };
+                println!("{mark} {}\n    {}", device.name, device.id);
+            }
+            return Ok(());
+        }
         // Extrait les pistes en WAV : c'est ce que l'éditeur charge pour
         // l'écoute en direct, et de quoi le vérifier sans interface.
         Some("tracks") => {
