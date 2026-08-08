@@ -3,14 +3,24 @@
    clair serait agressif dans les conditions réelles d'usage. */
 
 :root {
-  --bg: #0e0f13;
-  --surface: #16181f;
-  --surface-hover: #1c1f28;
-  --border: #23262f;
-  --text: #e7e9ee;
-  --text-dim: #9aa0ae;
-  --accent: #6a5cff;
-  --accent-soft: rgba(106, 92, 255, 0.14);
+  /* Fond légèrement bleuté plutôt que gris neutre : sur un écran de jeu, un
+     noir pur paraît creux, une teinte froide donne de la profondeur. */
+  --bg: #0b0d12;
+  --surface: #14171f;
+  --surface-hover: #1a1e28;
+  --border: #232733;
+  --text: #eceef4;
+  --text-dim: #949bab;
+
+  /* Un indigo franc, poussé en saturation. Le violet doux d'origine passait
+     inaperçu sur fond sombre ; celui-ci tient le rôle d'accent unique. */
+  --accent: #6d5efc;
+  --accent-bright: #9b8cff;
+  --accent-soft: rgba(109, 94, 252, 0.15);
+  /* Dégradé signature, repris sur tout ce qui compte : bouton principal,
+     vumètres, forme d'onde. C'est lui qui fait reconnaître le produit. */
+  --accent-gradient: linear-gradient(135deg, #6d5efc 0%, #a855f7 100%);
+
   --danger: #ff5c6a;
   --live: #2ee6a8;
   --radius: 14px;
@@ -51,11 +61,43 @@ header {
   gap: 16px;
   padding: 16px 24px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, #14161d, #101218);
+  background: linear-gradient(180deg, #171b24, #10131a);
+  position: relative;
 }
 
-.brand { font-size: 15px; font-weight: 600; letter-spacing: 0.2px; }
-.brand span { color: var(--accent); }
+/* Un filet lumineux sous l'en-tête, dégradé vers les bords : la barre paraît
+   éclairée par le contenu plutôt que posée dessus. */
+header::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(109, 94, 252, 0.5), transparent);
+}
+
+/* Marque : les trois barres reprises du logo, puis le nom.
+   Un resserrement des lettres et une graisse forte donnent le ton — c'est ce
+   qui distingue un outil soigné d'une fenêtre système. */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.3px;
+}
+.brand span { color: var(--accent-bright); }
+
+.brand-mark { display: flex; align-items: flex-end; gap: 2.5px; height: 17px; }
+.brand-mark i {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent-gradient);
+  animation: listening 1.9s ease-in-out infinite;
+}
+.brand-mark i:nth-child(1) { height: 45%; }
+.brand-mark i:nth-child(2) { height: 100%; animation-delay: 0.2s; }
+.brand-mark i:nth-child(3) { height: 65%; animation-delay: 0.4s; }
 
 .spacer { flex: 1; }
 
@@ -103,8 +145,15 @@ header {
 }
 .btn:hover { background: var(--surface-hover); }
 .btn:active { transform: scale(0.97); }
-.btn.primary { background: var(--accent); border-color: transparent; font-weight: 600; }
-.btn.primary:hover { filter: brightness(1.1); }
+.btn.primary {
+  background: var(--accent-gradient);
+  border-color: transparent;
+  font-weight: 620;
+  letter-spacing: -0.1px;
+  box-shadow: 0 4px 16px rgba(109, 94, 252, 0.3);
+}
+.btn.primary:hover { filter: brightness(1.12); box-shadow: 0 6px 22px rgba(109, 94, 252, 0.42); }
+.btn.primary:disabled { box-shadow: none; }
 .btn.ghost { background: transparent; }
 .btn.danger:hover { background: rgba(255, 92, 106, 0.12); color: var(--danger); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
@@ -181,7 +230,8 @@ main > section:not(.hidden) { animation: view-in 0.28s var(--ease); }
 .card h3 {
   margin: 0 0 6px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 620;
+  letter-spacing: -0.2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -213,7 +263,7 @@ main > section:not(.hidden) { animation: view-in 0.28s var(--ease); }
 .empty-mark span {
   width: 5px;
   border-radius: 3px;
-  background: linear-gradient(180deg, var(--accent), #8f7bff);
+  background: var(--accent-gradient);
   animation: listening 1.5s ease-in-out infinite;
 }
 .empty-mark span:nth-child(1) { height: 40%; animation-delay: 0s; }
@@ -275,7 +325,7 @@ video {
   gap: 6px;
   overflow-y: auto;
 }
-.panel h2 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.panel h2 { margin: 0 0 4px; font-size: 15px; font-weight: 650; letter-spacing: -0.25px; }
 .panel .hint { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
 /* Un avertissement doit se distinguer d'une simple indication : sans cela, une
    écoute en direct hors service passait pour un texte d'aide anodin. */
@@ -340,7 +390,7 @@ video {
   transform: scaleX(0);
   transform-origin: left;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--accent) 0%, #8f7bff 60%, var(--live) 100%);
+  background: var(--accent-gradient);
   /* Descente amortie : c'est ainsi qu'un vumètre se lit. */
   transition: transform 0.12s ease-out;
 }

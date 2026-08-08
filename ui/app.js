@@ -337,13 +337,13 @@ function drawWaveform() {
     // Une hauteur minimale garde une ligne continue dans les silences : un
     // trou complet se lirait comme une coupure du clip.
     const amplitude = Math.max(1.5, envelope[i] * (height / 2 - 2));
-    context.fillStyle = x / width <= progress ? "#7b6bff" : "#2a2e3a";
+    context.fillStyle = x / width <= progress ? "#8b7bff" : "#252935";
     context.fillRect(x, middle - amplitude, Math.max(1, step - 0.5), amplitude * 2);
   }
 
   // Tête de lecture.
   const head = progress * width;
-  context.fillStyle = "#e7e9ee";
+  context.fillStyle = "#eceef4";
   context.fillRect(head - 1, 0, 2, height);
 }
 
