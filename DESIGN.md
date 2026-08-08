@@ -13,21 +13,43 @@ d'un coup d'œil, aucun élément qui bouge sans raison.
 
 ## Couleur
 
-Un accent unique — un indigo poussé en saturation — décliné en **dégradé
-signature** (`--accent-gradient`) repris sur tout ce qui compte : bouton
-principal, vumètres, forme d'onde, marque. C'est la répétition d'un même geste
-qui crée l'identité, pas une couleur isolée.
+**Des gris neutres, sans dominante colorée.** Une teinte froide appliquée à
+toute l'interface — bleutée, violette — produit ce rendu « science-fiction » que
+tous les utilitaires de capture se croient obligés d'adopter, et qui date
+immédiatement un logiciel. Un neutre franc laisse au contenu, les vignettes, le
+soin d'apporter la couleur.
 
-Le fond est **légèrement bleuté** plutôt que gris neutre : un noir pur paraît
-creux sur un écran de jeu, une teinte froide donne de la profondeur.
+**L'action principale est blanche.** Sur fond sombre, rien ne ressort davantage.
+C'est aussi ce qui évite le bouton coloré saturé et le dégradé à deux teintes,
+signes distinctifs d'une interface qui essaie trop.
 
-Les ombres sont **teintées de l'accent**, jamais noires. Sur fond sombre, une
-ombre neutre salit ; une ombre colorée fait rayonner.
+La couleur est **réservée au sens**, jamais décorative. Quatre valeurs, pas une
+de plus :
 
-Trois couleurs de sens, et trois seulement :
-- **vert** (`--live`) : le buffer enregistre
-- **ambre** : attention — sauvegarde en cours, écoute indisponible, son en double
-- **rouge** (`--danger`) : destruction ou échec
+| | |
+|---|---|
+| **vert** `--live` | le buffer enregistre |
+| **ambre** `--warn` | attention : sauvegarde en cours, écoute indisponible, son en double |
+| **rouge** `--danger` | destruction ou échec |
+| **bleu** `--accent` | sélection, focus, progression — jamais un aplat de fond |
+
+Les ombres sont **noires et discrètes**. Une ombre colorée attire l'œil sur un
+bord, c'est-à-dire nulle part.
+
+## Rayons
+
+Trois valeurs, cohérentes entre elles : **10 px** pour un contrôle, **14 px**
+pour une carte, **20 px** pour une boîte de dialogue. Un rayon qui varie sans
+règle est ce qui donne l'impression d'un assemblage.
+
+## Mouvement
+
+Deux courbes seulement. `--ease` pour ce qui répond au doigt — court, net.
+`--ease-out` pour ce qui entre en scène — plus long, décéléré. Un mouvement
+uniforme partout paraît mécanique.
+
+Les entrées durent 0,34 à 0,42 s : assez pour être perçues, jamais assez pour
+faire attendre.
 
 ## Typographie
 
