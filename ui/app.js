@@ -112,13 +112,28 @@ async function loadLibrary() {
     card.style.animationDelay = `${Math.min(position, 12) * 35}ms`;
     card.onclick = () => openEditor(clip);
 
-    // Pas d'aperçu vidéo dans les cartes.
+    // Signature visuelle du clip.
     //
-    // Chaque élément <video> garde le fichier ouvert et mobilise un décodeur ;
-    // les cumuler dégradait la lecture dans l'éditeur. Le confort qu'ils
-    // apportaient ne vaut pas ce risque tant que la lecture n'est pas
-    // parfaitement fiable. À reconsidérer plus tard, avec de vraies vignettes
-    // extraites une fois pour toutes plutôt que des lecteurs vivants.
+    // Pas de vignette : un élément <video> par carte garde le fichier ouvert et
+    // mobilise un décodeur, ce qui dégradait la lecture dans l'éditeur. À la
+    // place, une teinte dérivée du nom — stable pour un clip donné, différente
+    // d'un clip à l'autre. On reconnaît sa carte à sa couleur, et la grille
+    // cesse d'être une liste grise.
+    const hue = hueOf(clip.name);
+    const cover = document.createElement("div");
+    cover.className = "cover";
+    cover.style.background =
+      `linear-gradient(135deg, hsl(${hue} 62% 46%), hsl(${(hue + 48) % 360} 58% 34%))`;
+
+    const duration = document.createElement("span");
+    duration.className = "cover-duration";
+    duration.textContent = formatDuration(clip.seconds);
+
+    const count = document.createElement("span");
+    count.className = "cover-tracks";
+    count.textContent = `${clip.tracks.length} piste${clip.tracks.length > 1 ? "s" : ""}`;
+    cover.append(count, duration);
+
     const title = document.createElement("h3");
     title.textContent = clip.name;
 
@@ -136,9 +151,23 @@ async function loadLibrary() {
       chips.appendChild(chip);
     }
 
-    card.append(title, meta, chips);
+    card.append(cover, title, meta, chips);
     grid.appendChild(card);
   });
+}
+
+/// Teinte stable dérivée d'une chaîne, entre 0 et 359.
+///
+/// Le même clip garde sa couleur d'une session à l'autre : c'est ce qui permet
+/// de le retrouver d'un coup d'œil sans lire son nom.
+function hueOf(text) {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash * 31 + text.charCodeAt(i)) % 360;
+  }
+  // Décalage vers les indigos et violets, pour rester dans la famille de
+  // l'accent plutôt que de piocher au hasard dans tout le spectre.
+  return (hash * 0.45 + 220) % 360;
 }
 
 // ──────────────────────────────── éditeur ──────────────────────────────────

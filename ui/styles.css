@@ -72,8 +72,10 @@ button {
 header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px 24px;
+  /* Espacement resserré entre actions, large entre groupes : c'est le blanc
+     qui crée la hiérarchie, pas les traits de séparation. */
+  gap: 10px;
+  padding: 14px 22px;
   border-bottom: 1px solid var(--border);
   background: linear-gradient(180deg, #171b24, #10131a);
   position: relative;
@@ -184,7 +186,7 @@ input:focus-visible {
 .btn.danger:hover { background: rgba(255, 92, 106, 0.12); color: var(--danger); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
-main { flex: 1; overflow-y: auto; padding: 24px; }
+main { flex: 1; overflow-y: auto; padding: 28px 26px 32px; }
 
 /* Chaque vue entre par un léger glissement : le passage bibliothèque ↔ éditeur
    se lit comme un déplacement, pas comme un remplacement brutal. */
@@ -198,19 +200,53 @@ main > section:not(.hidden) { animation: view-in 0.28s var(--ease); }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 18px;
+  /* Une largeur maximale évite que la grille s'étire indéfiniment sur un écran
+     large : au-delà, l'œil perd la relation entre les cartes. */
+  max-width: 1400px;
 }
 
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 12px 12px 16px;
   cursor: pointer;
   transition: transform 0.2s var(--ease), border-color 0.2s var(--ease),
               box-shadow 0.2s var(--ease);
 }
+
+/* Signature colorée du clip : donne à la grille une présence que du texte seul
+   n'aura jamais, sans le coût d'une vignette vidéo. */
+.cover {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 10px;
+}
+/* Voile sombre en bas : les libellés restent lisibles quelle que soit la
+   teinte tirée. */
+.cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.55) 100%);
+}
+.cover span { position: relative; z-index: 1; font-size: 11px; font-weight: 600; }
+.cover-tracks {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(6px);
+}
+.cover-duration { font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+.card:hover .cover { filter: brightness(1.08); }
 .card:hover {
   transform: translateY(-3px);
   border-color: rgba(106, 92, 255, 0.4);
@@ -317,13 +353,21 @@ main > section:not(.hidden) { animation: view-in 0.28s var(--ease); }
 
 /* ─────────────────────────────── éditeur ──────────────────────────────── */
 
-.editor { display: grid; grid-template-columns: 1fr 340px; gap: 24px; height: 100%; }
+.editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 26px;
+  height: 100%;
+  max-width: 1500px;
+}
 
 video {
   width: 100%;
   border-radius: var(--radius);
   background: #000;
   border: 1px solid var(--border);
+  /* Le lecteur porte l'ombre : c'est lui le centre de gravité de l'écran. */
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
 }
 
 /* Forme d'onde : la silhouette sonore du clip, sous le lecteur. Les pics sont
@@ -345,7 +389,7 @@ video {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 18px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 6px;
