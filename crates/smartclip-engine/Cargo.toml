@@ -9,6 +9,8 @@ smartclip-core.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# Encodage des vignettes. Sans dependance native, quelques dizaines de Ko.
+png = "0.17"
 tracing.workspace = true
 tracing-subscriber.workspace = true
 # La macro #[implement] génère du code référençant `windows_core` par son nom

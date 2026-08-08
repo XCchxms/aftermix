@@ -26,8 +26,12 @@ use windows::Win32::Media::MediaFoundation::{
     MFAudioFormat_AAC, MFAudioFormat_Float, MFAudioFormat_PCM, MFCreateAttributes,
     MFCreateMediaType, MFCreateMemoryBuffer, MFCreateSample, MFCreateSinkWriterFromURL,
     MFCreateSourceReaderFromURL, MFMediaType_Audio, MFMediaType_Video,
+    MF_MT_FRAME_SIZE, MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING,
+    MF_SOURCE_READER_FIRST_VIDEO_STREAM, MFVideoFormat_RGB32,
 };
-use windows::core::HSTRING;
+use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
+use windows::Win32::System::Variant::VT_I8;
+use windows::core::{GUID, HSTRING};
 
 use smartclip_core::clock::HNS_PER_SEC;
 
@@ -163,6 +167,146 @@ pub fn mix_and_export(input: &Path, output: &Path, gains: &[f32]) -> Result<MixO
         peak,
         tracks_mixed,
     })
+}
+
+/// Largeur des vignettes. La hauteur suit le rapport de l'image.
+const THUMBNAIL_WIDTH: u32 = 480;
+
+/// Extrait une image du clip et l'écrit en PNG.
+///
+/// Côté Rust plutôt que dans la vue : le protocole `asset:` n'est pas l'origine
+/// de la page, ce qui « teinte » un canvas HTML et fait échouer sa lecture. Et
+/// l'écrire sur disque la rend permanente, là où une extraction dans la vue
+/// recommençait à chaque session.
+///
+/// L'image est prise un peu après le début — les toutes premières sont souvent
+/// noires, le temps que l'encodeur se cale.
+pub fn extract_thumbnail(input: &Path, output: &Path) -> Result<()> {
+    let mut attributes: Option<IMFAttributes> = None;
+    unsafe { MFCreateAttributes(&mut attributes, 1)? };
+    let attributes = attributes.context("attributs nuls")?;
+    unsafe {
+        // Autorise le lecteur à insérer un convertisseur : c'est lui qui rend
+        // du RGB depuis le NV12 natif du décodeur.
+        attributes.SetUINT32(&MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1)?;
+    }
+
+    let reader = unsafe {
+        MFCreateSourceReaderFromURL(&HSTRING::from(input.to_string_lossy().as_ref()), &attributes)?
+    };
+    let video = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
+
+    unsafe {
+        reader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false)?;
+        reader.SetStreamSelection(video, true)?;
+
+        let target = MFCreateMediaType()?;
+        target.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
+        target.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_RGB32)?;
+        reader
+            .SetCurrentMediaType(video, None, &target)
+            .context("le décodeur a refusé le format RGB")?;
+    }
+
+    // Dimensions réelles après conversion.
+    let (width, height) = unsafe {
+        let current = reader.GetCurrentMediaType(video)?;
+        let packed = current.GetUINT64(&MF_MT_FRAME_SIZE)?;
+        ((packed >> 32) as u32, (packed & 0xFFFF_FFFF) as u32)
+    };
+    if width == 0 || height == 0 {
+        bail!("dimensions vidéo inconnues");
+    }
+
+    // Position de l'image : un quart du clip, borné à deux secondes. Assez tard
+    // pour éviter le noir du début, assez tôt pour rester représentatif.
+    let duration = inspect(input).map(|i| i.duration_hns).unwrap_or(0);
+    let seek = (duration / 4).min(2 * HNS_PER_SEC);
+    if seek > 0 {
+        let mut position = PROPVARIANT::default();
+        unsafe {
+            let inner = &mut position.Anonymous.Anonymous;
+            inner.vt = VT_I8;
+            inner.Anonymous.hVal = seek;
+            // Un positionnement refusé n'est pas fatal : on prendra la première
+            // image venue plutôt que d'échouer.
+            // GUID nul : le format de position par défaut, en unités de 100 ns.
+            let _ = reader.SetCurrentPosition(&GUID::zeroed(), &position);
+        }
+    }
+
+    // Lecture de la première image disponible.
+    let mut empty_reads = 0u32;
+    let sample = loop {
+        let (mut actual, mut flags, mut timestamp) = (0u32, 0u32, 0i64);
+        let mut sample: Option<IMFSample> = None;
+        unsafe {
+            reader.ReadSample(
+                video,
+                0,
+                Some(&mut actual),
+                Some(&mut flags),
+                Some(&mut timestamp),
+                Some(&mut sample),
+            )?;
+        }
+        if flags & MF_SOURCE_READERF_ENDOFSTREAM.0 as u32 != 0 {
+            bail!("aucune image dans le clip");
+        }
+        match sample {
+            Some(sample) => break sample,
+            None => {
+                empty_reads += 1;
+                if empty_reads > MAX_EMPTY_READS {
+                    bail!("aucune image exploitable");
+                }
+            }
+        }
+    };
+
+    let pixels = unsafe {
+        let buffer = sample.ConvertToContiguousBuffer()?;
+        let mut data = std::ptr::null_mut();
+        let mut length = 0u32;
+        buffer.Lock(&mut data, None, Some(&mut length))?;
+        let raw = std::slice::from_raw_parts(data, length as usize).to_vec();
+        buffer.Unlock()?;
+        raw
+    };
+
+    write_thumbnail(output, &pixels, width, height)
+}
+
+/// Réduit l'image et l'écrit en PNG.
+fn write_thumbnail(output: &Path, pixels: &[u8], width: u32, height: u32) -> Result<()> {
+    let target_width = THUMBNAIL_WIDTH.min(width);
+    let target_height = (height * target_width / width).max(1);
+    let mut rgba = Vec::with_capacity((target_width * target_height * 4) as usize);
+
+    for y in 0..target_height {
+        // RGB32 de Media Foundation est stocké de bas en haut : sans cette
+        // inversion la vignette sort à l'envers.
+        let source_y = height - 1 - (y * height / target_height).min(height - 1);
+        for x in 0..target_width {
+            let source_x = x * width / target_width;
+            let offset = ((source_y * width + source_x) * 4) as usize;
+            match pixels.get(offset..offset + 4) {
+                // L'ordre est BGRA en mémoire, RGBA dans le PNG.
+                Some(p) => rgba.extend_from_slice(&[p[2], p[1], p[0], 255]),
+                None => rgba.extend_from_slice(&[0, 0, 0, 255]),
+            }
+        }
+    }
+
+    if let Some(parent) = output.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let file = std::io::BufWriter::new(std::fs::File::create(output)?);
+    let mut encoder = png::Encoder::new(file, target_width, target_height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.write_header()?.write_image_data(&rgba)?;
+    Ok(())
 }
 
 /// Intervalles entre images vidéo consécutives, en millisecondes.

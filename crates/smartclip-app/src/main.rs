@@ -28,6 +28,8 @@ struct ClipView {
     seconds: f64,
     megabytes: f64,
     created: u64,
+    /// Vignette du clip, si elle existe. La vue la convertit en URL `asset:`.
+    thumbnail: Option<String>,
     /// Pistes réellement occupées : les emplacements vacants sont retirés ici
     /// plutôt que dans la vue, pour qu'aucune interface future n'ait à
     /// reproduire la règle.
@@ -328,6 +330,9 @@ fn list_clips(state: State<'_, AppState>) -> Result<Vec<ClipView>, String> {
             seconds: clip.seconds,
             megabytes: clip.bytes as f64 / 1_048_576.0,
             created: clip.created,
+            thumbnail: clip
+                .thumbnail
+                .map(|path| path.to_string_lossy().into_owned()),
             tracks: clip
                 .tracks
                 .into_iter()

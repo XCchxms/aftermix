@@ -815,6 +815,14 @@ fn save_now(
         tracing::warn!("métadonnées non écrites : {e:#}");
     }
 
+    // Vignette extraite une fois pour toutes, à côté du clip. Son échec ne
+    // compromet pas la sauvegarde : la bibliothèque sait afficher une carte
+    // sans image.
+    let thumbnail = crate::library::ClipMeta::thumbnail_path(path);
+    if let Err(e) = crate::export::extract_thumbnail(path, &thumbnail) {
+        tracing::warn!("vignette non extraite : {e:#}");
+    }
+
     Ok(SaveOutcome {
         path: path.to_path_buf(),
         seconds,

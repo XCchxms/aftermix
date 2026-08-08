@@ -3203,6 +3203,7 @@ name = "smartclip-engine"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "png 0.17.16",
  "serde",
  "serde_json",
  "smartclip-core",

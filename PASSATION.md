@@ -97,20 +97,17 @@ Aucun de ces points n'empêche l'usage quotidien.
    travail fourni. **C'est le chemin critique de toute diffusion** : sans elle,
    SmartScreen bloque chaque installation et les antivirus réagissent. À engager
    avant tout le reste si une bêta est envisagée.
-2. **Vignettes de la bibliothèque** — ne s'affichent pas chez l'utilisateur. Le
-   canvas est vraisemblablement « teinté » par le protocole `asset:`, qui n'est
-   pas l'origine de la page, ce qui fait échouer `toDataURL`. `crossOrigin`
-   vient d'être ajouté sans confirmation. **Si cela ne suffit pas, la solution
-   robuste est d'extraire la vignette côté Rust** (`IMFSourceReader` + une image
-   décodée) et de l'écrire à côté du clip à la sauvegarde — ce qui a l'avantage
-   de la persister au lieu de la recalculer à chaque session.
-3. **Blocage sous charge** — survenu deux fois avec un jeu lourd, jamais depuis
+2. **Blocage sous charge** — survenu deux fois avec un jeu lourd, jamais depuis
    les correctifs. Sans parade active : celle qui existait a été retirée car
    elle causait un défaut pire. Si le blocage revient, déporter l'encodage dans
    un thread à file bornée — **sans jamais toucher au rythme de la boucle**.
 4. **Plein écran exclusif**, **sortie de veille**, **NVIDIA / Intel** — non
    testés. Les MFT diffèrent nettement entre constructeurs.
-5. **Marqueur rétroactif** — idée retenue, non commencée. Poser un repère
+5. **Vignettes des anciens clips** — elles ne sont créées qu'à la sauvegarde.
+   Les clips antérieurs gardent une couverture unie tant qu'un balayage
+   rétroactif n'a pas été ajouté : appeler `export::extract_thumbnail` sur tout
+   clip dont le `.png` manque, au premier chargement de la bibliothèque.
+6. **Marqueur rétroactif** — idée retenue, non commencée. Poser un repère
    pendant la partie sans rien enregistrer, puis extraire les moments marqués en
    fin de session. Le buffer contient déjà tout.
 

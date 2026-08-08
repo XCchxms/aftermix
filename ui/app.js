@@ -117,18 +117,16 @@ async function loadLibrary() {
       setTimeout(() => openEditor(clip), 130);
     };
 
-    // Signature visuelle du clip.
-    //
-    // Pas de vignette : un élément <video> par carte garde le fichier ouvert et
-    // mobilise un décodeur, ce qui dégradait la lecture dans l'éditeur. À la
-    // place, une teinte dérivée du nom — stable pour un clip donné, différente
-    // d'un clip à l'autre. On reconnaît sa carte à sa couleur, et la grille
-    // cesse d'être une liste grise.
-    // Fond neutre en attendant la vignette : une couleur vive qui disparaît
-    // ensuite ferait clignoter la grille au chargement.
+    // Vignette extraite cote Rust a la sauvegarde, puis conservee a cote du
+    // clip. La faire ici imposait un decodeur video par carte, ce qui
+    // degradait la lecture, et le canvas etait de toute facon teinte par le
+    // protocole asset.
     const cover = document.createElement("div");
     cover.className = "cover";
-    cover.dataset.path = clip.path;
+    if (clip.thumbnail) {
+      cover.style.backgroundImage = `url(${convertFileSrc(clip.thumbnail)})`;
+      cover.classList.add("has-image");
+    }
 
     const duration = document.createElement("span");
     duration.className = "cover-duration";
@@ -159,89 +157,6 @@ async function loadLibrary() {
     card.append(cover, title, meta, chips);
     grid.appendChild(card);
   });
-
-  // Après l'affichage : la grille est utilisable immédiatement, les vignettes
-  // se posent au fur et à mesure.
-  extractThumbnails(clips);
-}
-
-/// Vignettes déjà extraites, par chemin de clip.
-const thumbnails = new Map();
-
-/// Extrait une image de chaque clip, l'une après l'autre.
-///
-/// Un lecteur vidéo temporaire, une image dessinée sur un canvas, puis le
-/// lecteur est détruit. C'est ce qui distingue cette approche des aperçus
-/// retirés plus tôt : ceux-là gardaient un décodeur ouvert par carte en
-/// permanence et saturaient le moteur de rendu. Ici un seul existe à la fois,
-/// et seulement le temps d'une image.
-///
-/// Séquentiel à dessein : décoder six vidéos en parallèle produirait exactement
-/// la saturation qu'on cherche à éviter.
-async function extractThumbnails(clips) {
-  for (const clip of clips) {
-    if (thumbnails.has(clip.path)) {
-      paintThumbnail(clip.path);
-      continue;
-    }
-    try {
-      const image = await grabFrame(convertFileSrc(clip.path));
-      thumbnails.set(clip.path, image);
-      paintThumbnail(clip.path);
-    } catch (error) {
-      // Un clip illisible garde sa couverture unie : ce n'est pas une raison
-      // d'interrompre l'extraction des suivants. L'erreur est tout de même
-      // journalisée — une vignette absente sur *tous* les clips signale un
-      // problème d'accès, pas un fichier abîmé.
-      console.warn(`vignette impossible pour ${clip.name} :`, error);
-    }
-  }
-}
-
-/// Rend une image du clip, prise un peu après le début.
-function grabFrame(url) {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement("video");
-    video.muted = true;
-    video.preload = "metadata";
-    // Sans cet attribut, le canvas est « teinté » par une source d'origine
-    // différente — le protocole `asset:` n'est pas l'origine de la page — et
-    // `toDataURL` lève une erreur de sécurité au lieu de rendre l'image.
-    video.crossOrigin = "anonymous";
-    video.src = url;
-
-    const cleanup = () => {
-      video.removeAttribute("src");
-      video.load();
-    };
-
-    video.onloadedmetadata = () => {
-      // Une seconde après le début : la toute première image est souvent noire
-      // ou incomplète, le temps que l'encodeur se cale.
-      video.currentTime = Math.min(1, (video.duration || 2) / 4);
-    };
-    video.onseeked = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 480;
-      canvas.height = Math.round((video.videoHeight / video.videoWidth) * 480) || 270;
-      canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
-      cleanup();
-      resolve(canvas.toDataURL("image/jpeg", 0.72));
-    };
-    video.onerror = () => {
-      cleanup();
-      reject(new Error("clip illisible"));
-    };
-  });
-}
-
-function paintThumbnail(path) {
-  const cover = document.querySelector(`.cover[data-path="${CSS.escape(path)}"]`);
-  const image = thumbnails.get(path);
-  if (cover && image) {
-    cover.style.backgroundImage = `url(${image})`;
-    cover.classList.add("has-image");
-  }
 }
 
 // ──────────────────────────────── éditeur ──────────────────────────────────

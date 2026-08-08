@@ -31,6 +31,11 @@ impl ClipMeta {
         clip.with_extension("json")
     }
 
+    /// Chemin de la vignette associée à un clip.
+    pub fn thumbnail_path(clip: &Path) -> PathBuf {
+        clip.with_extension("png")
+    }
+
     pub fn write(&self, clip: &Path) -> Result<()> {
         let path = Self::sidecar_path(clip);
         let json = serde_json::to_string_pretty(self)?;
@@ -53,6 +58,8 @@ pub struct Clip {
     pub seconds: f64,
     pub tracks: Vec<String>,
     pub created: u64,
+    /// Vignette du clip, si elle a pu être extraite.
+    pub thumbnail: Option<PathBuf>,
     /// Vrai si les métadonnées manquaient et que les noms sont des replis.
     pub metadata_missing: bool,
 }
@@ -107,9 +114,11 @@ pub fn describe(path: &Path) -> Result<Clip> {
         created: fallback_created,
     });
 
+    let thumbnail = ClipMeta::thumbnail_path(path);
     Ok(Clip {
         path: path.to_path_buf(),
         name,
+        thumbnail: thumbnail.exists().then_some(thumbnail),
         bytes: metadata.len(),
         seconds: meta.seconds,
         tracks: meta.tracks,
@@ -126,6 +135,7 @@ pub fn describe(path: &Path) -> Result<Clip> {
 pub fn delete(clip: &Path) -> Result<()> {
     std::fs::remove_file(clip).with_context(|| format!("suppression de {}", clip.display()))?;
     let _ = std::fs::remove_file(ClipMeta::sidecar_path(clip));
+    let _ = std::fs::remove_file(ClipMeta::thumbnail_path(clip));
     Ok(())
 }
 
