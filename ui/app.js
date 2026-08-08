@@ -212,8 +212,11 @@ async function openEditor(clip) {
         true,
       );
     }
-    // L'équilibrage n'a de sens qu'une fois les pistes analysées.
+    // L'équilibrage et la forme d'onde n'ont de sens qu'une fois les pistes
+    // analysées.
     el("autoMix").disabled = false;
+    envelope = preview.waveform();
+    drawWaveform();
     if (!el("player").paused) preview.start();
   } catch (error) {
     // Sans écoute en direct, l'éditeur reste utilisable : les faders agissent
@@ -295,6 +298,52 @@ function buildTrack(track) {
   return row;
 }
 
+// ─────────────────────────── forme d'onde ──────────────────────────────────
+
+/// Enveloppe du clip courant, calculée une fois au chargement.
+let envelope = null;
+
+/// Dessine la forme d'onde et la position de lecture.
+///
+/// Deux couches : l'enveloppe complète en sourdine, et la portion déjà lue en
+/// couleur. On voit d'un coup d'œil où sont les moments forts et où l'on en
+/// est — ce qu'une barre de progression seule ne dit pas.
+function drawWaveform() {
+  const canvas = el("waveform");
+  const context = canvas.getContext("2d");
+  const ratio = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  if (width === 0 || height === 0) return;
+
+  if (canvas.width !== width * ratio) {
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
+  }
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  context.clearRect(0, 0, width, height);
+  if (!envelope) return;
+
+  const player = el("player");
+  const progress = player.duration > 0 ? player.currentTime / player.duration : 0;
+  const middle = height / 2;
+  const step = width / envelope.length;
+
+  for (let i = 0; i < envelope.length; i++) {
+    const x = i * step;
+    // Une hauteur minimale garde une ligne continue dans les silences : un
+    // trou complet se lirait comme une coupure du clip.
+    const amplitude = Math.max(1.5, envelope[i] * (height / 2 - 2));
+    context.fillStyle = x / width <= progress ? "#7b6bff" : "#2a2e3a";
+    context.fillRect(x, middle - amplitude, Math.max(1, step - 0.5), amplitude * 2);
+  }
+
+  // Tête de lecture.
+  const head = progress * width;
+  context.fillStyle = "#e7e9ee";
+  context.fillRect(head - 1, 0, 2, height);
+}
+
 /// Applique l'équilibre proposé aux faders.
 ///
 /// Les curseurs bougent réellement : l'utilisateur voit ce qui a été décidé
@@ -349,6 +398,7 @@ async function deleteClip() {
 }
 
 async function closeEditor() {
+  envelope = null;
   preview.unload();
   if (state.clip) invoke("clear_preview", { source: state.clip.path }).catch(() => {});
   // Couper la source libère le fichier : sans cela Windows le garde verrouillé
@@ -505,9 +555,18 @@ function animateMeters() {
     const bar = trackRows.get(index)?.querySelector(".meter span");
     if (bar) bar.style.transform = `scaleX(${level.toFixed(3)})`;
   }
+  if (envelope) drawWaveform();
   requestAnimationFrame(animateMeters);
 }
 requestAnimationFrame(animateMeters);
+
+// Navigation par clic sur la forme d'onde : on vise un pic, on y va.
+el("waveform").onclick = (event) => {
+  const player = el("player");
+  if (!player.duration) return;
+  const bounds = event.currentTarget.getBoundingClientRect();
+  player.currentTime = ((event.clientX - bounds.left) / bounds.width) * player.duration;
+};
 
 // ── réglages ──
 el("settings").onclick = openSettings;

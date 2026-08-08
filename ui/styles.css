@@ -194,6 +194,21 @@ video {
   border: 1px solid var(--border);
 }
 
+/* Forme d'onde : la silhouette sonore du clip, sous le lecteur. Les pics sont
+   les moments forts — c'est là qu'on veut aller. */
+.waveform {
+  width: 100%;
+  height: 64px;
+  margin-top: 12px;
+  display: block;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease);
+}
+.waveform:hover { border-color: #333849; }
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);

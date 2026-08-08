@@ -119,6 +119,44 @@ export class Preview {
     return pairs;
   }
 
+  /// Enveloppe sonore du clip, en `resolution` points entre 0 et 1.
+  ///
+  /// Combine toutes les pistes audibles : c'est l'intensité de la scène qu'on
+  /// cherche à voir, pas celle d'une source en particulier. Les pics
+  /// correspondent aux moments forts — un tir, un cri, une explosion — et
+  /// permettent de retrouver l'action sans la chercher à l'aveugle.
+  waveform(resolution = 900) {
+    const audible = [...this.tracks.values()].filter((t) => t.peak >= SILENCE_PEAK);
+    if (audible.length === 0) return null;
+
+    const envelope = new Float32Array(resolution);
+    for (const track of audible) {
+      const data = track.buffer.getChannelData(0);
+      const perPoint = Math.max(1, Math.floor(data.length / resolution));
+      for (let point = 0; point < resolution; point++) {
+        let peak = 0;
+        const start = point * perPoint;
+        // Un pas d'échantillonnage à l'intérieur du segment suffit : on cherche
+        // la silhouette, pas la précision.
+        for (let i = start; i < start + perPoint; i += 8) {
+          const value = Math.abs(data[i] ?? 0);
+          if (value > peak) peak = value;
+        }
+        // Les pistes se combinent par leur maximum : additionner ferait
+        // saturer l'affichage dès que deux sources parlent ensemble.
+        if (peak > envelope[point]) envelope[point] = peak;
+      }
+    }
+
+    // Normalisation sur le pic réel : un clip discret doit remplir la vue
+    // autant qu'un clip fort, sinon il paraît vide.
+    const loudest = envelope.reduce((max, v) => Math.max(max, v), 0);
+    if (loudest > 0) {
+      for (let i = 0; i < envelope.length; i++) envelope[i] /= loudest;
+    }
+    return envelope;
+  }
+
   /// Niveau courant de chaque piste, entre 0 et 1.
   ///
   /// Destiné à l'affichage : la valeur est déjà lissée par l'analyseur, et une
