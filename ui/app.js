@@ -188,9 +188,12 @@ async function extractThumbnails(clips) {
       const image = await grabFrame(convertFileSrc(clip.path));
       thumbnails.set(clip.path, image);
       paintThumbnail(clip.path);
-    } catch {
+    } catch (error) {
       // Un clip illisible garde sa couverture unie : ce n'est pas une raison
-      // d'interrompre l'extraction des suivants.
+      // d'interrompre l'extraction des suivants. L'erreur est tout de même
+      // journalisée — une vignette absente sur *tous* les clips signale un
+      // problème d'accès, pas un fichier abîmé.
+      console.warn(`vignette impossible pour ${clip.name} :`, error);
     }
   }
 }
@@ -201,6 +204,10 @@ function grabFrame(url) {
     const video = document.createElement("video");
     video.muted = true;
     video.preload = "metadata";
+    // Sans cet attribut, le canvas est « teinté » par une source d'origine
+    // différente — le protocole `asset:` n'est pas l'origine de la page — et
+    // `toDataURL` lève une erreur de sécurité au lieu de rendre l'image.
+    video.crossOrigin = "anonymous";
     video.src = url;
 
     const cleanup = () => {

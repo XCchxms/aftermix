@@ -1,5 +1,10 @@
 # SmartClip Studio
 
+> **Pour reprendre le projet, lire [PASSATION.md](PASSATION.md) d'abord** — il
+> est autosuffisant. Ce README-ci est la référence technique détaillée : il
+> contient les mesures, les contraintes découvertes et le raisonnement derrière
+> chaque décision. Les règles visuelles sont dans [DESIGN.md](DESIGN.md).
+
 Capture de clips de jeu dont **les pistes audio restent modifiables après
 l'enregistrement**. Le jeu trop fort, le micro trop faible, Discord qui couvre
 les voix : on corrige après coup, en quelques secondes.
