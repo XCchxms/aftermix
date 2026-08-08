@@ -159,6 +159,8 @@ async function openEditor(clip) {
 
   const container = el("tracks");
   container.innerHTML = "";
+  // Réactivé seulement après analyse des pistes du nouveau clip.
+  el("autoMix").disabled = true;
 
   if (clip.tracks.length === 0) {
     const note = document.createElement("div");
@@ -210,6 +212,8 @@ async function openEditor(clip) {
         true,
       );
     }
+    // L'équilibrage n'a de sens qu'une fois les pistes analysées.
+    el("autoMix").disabled = false;
     if (!el("player").paused) preview.start();
   } catch (error) {
     // Sans écoute en direct, l'éditeur reste utilisable : les faders agissent
@@ -283,6 +287,30 @@ function buildTrack(track) {
 
   row.append(head, slider);
   return row;
+}
+
+/// Applique l'équilibre proposé aux faders.
+///
+/// Les curseurs bougent réellement : l'utilisateur voit ce qui a été décidé
+/// pour lui et peut le corriger. Un réglage invisible serait à la fois moins
+/// utile et moins fiable.
+function applyAutoMix() {
+  const labels = new Map(state.clip.tracks.map((t) => [t.index, t.label]));
+  const suggested = preview.suggestGains(labels);
+  if (suggested.size === 0) {
+    toast("Aucune piste audible à équilibrer", true);
+    return;
+  }
+
+  for (const [index, gain] of suggested) {
+    const row = trackRows.get(index);
+    const slider = row?.querySelector('input[type="range"]');
+    if (!slider) continue;
+    slider.value = String(Math.round(gain * 100));
+    // `input` déclenche la logique existante : mémorisation, écoute, libellé.
+    slider.dispatchEvent(new Event("input"));
+  }
+  toast(`${suggested.size} piste(s) équilibrée(s) — ajuste si besoin`);
 }
 
 async function exportMix() {
@@ -445,6 +473,7 @@ async function saveSettings() {
 el("toggle").onclick = toggleRecording;
 el("save").onclick = saveClip;
 el("back").onclick = closeEditor;
+el("autoMix").onclick = applyAutoMix;
 el("export").onclick = exportMix;
 el("delete").onclick = deleteClip;
 

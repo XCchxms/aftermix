@@ -50,6 +50,22 @@ function correlation(first, second) {
   return Math.abs(dot) / Math.sqrt(normA * normB);
 }
 
+/// Niveau perçu d'un tampon : moyenne quadratique, échantillonnée.
+///
+/// La crête ne dit rien du volume ressenti — un seul claquement la fait bondir
+/// alors que la piste reste discrète. C'est la moyenne quadratique qui
+/// correspond à ce qu'on entend, donc à ce qu'il faut équilibrer.
+function loudnessOf(buffer) {
+  const data = buffer.getChannelData(0);
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < data.length; i += 256) {
+    sum += data[i] * data[i];
+    count++;
+  }
+  return count > 0 ? Math.sqrt(sum / count) : 0;
+}
+
 /// Amplitude maximale d'un tampon, échantillonnée grossièrement.
 ///
 /// Sert à repérer les pistes vides : une application ouverte mais silencieuse
@@ -103,6 +119,43 @@ export class Preview {
     return pairs;
   }
 
+  /// Propose un équilibre entre les pistes audibles.
+  ///
+  /// Le principe : amener chaque source au même niveau perçu, puis appliquer
+  /// une pondération par rôle. Un micro doit passer *au-dessus* du jeu — c'est
+  /// la voix qui porte le moment, le jeu n'est qu'un décor sonore. Discord se
+  /// place entre les deux : audible sans couvrir.
+  ///
+  /// Ce n'est qu'une proposition, jamais un réglage imposé : l'utilisateur
+  /// garde la main, et c'est bien pour ça qu'il utilise SmartClip.
+  suggestGains(labels) {
+    const audible = [...this.tracks.entries()].filter(
+      ([, track]) => track.peak >= SILENCE_PEAK && track.loudness > 0,
+    );
+    if (audible.length === 0) return new Map();
+
+    // Référence : la piste la plus forte reste à son niveau, les autres s'y
+    // ajustent. Remonter tout le monde saturerait le mixage.
+    const reference = Math.max(...audible.map(([, t]) => t.loudness));
+
+    const weightOf = (label = "") => {
+      const name = label.toLowerCase();
+      if (name.includes("micro")) return 1.25;
+      if (name.includes("discord")) return 0.85;
+      if (name.includes("musique")) return 0.5;
+      return 0.7; // jeu, navigateur, inconnu : le décor
+    };
+
+    const gains = new Map();
+    for (const [index, track] of audible) {
+      const balanced = (reference / track.loudness) * weightOf(labels.get(index));
+      // Bornes larges mais fermes : au-delà, on amplifie surtout le bruit de
+      // fond, en deçà la piste devient inaudible et autant la couper.
+      gains.set(index, Math.min(2, Math.max(0.15, balanced)));
+    }
+    return gains;
+  }
+
   /// Indices des pistes qui ne contiennent aucun son.
   silentTracks() {
     return [...this.tracks.entries()]
@@ -146,7 +199,13 @@ export class Preview {
     for (const { index, buffer } of decoded) {
       const gainNode = this.context.createGain();
       gainNode.connect(this.context.destination);
-      this.tracks.set(index, { buffer, gainNode, source: null, peak: peakOf(buffer) });
+      this.tracks.set(index, {
+        buffer,
+        gainNode,
+        source: null,
+        peak: peakOf(buffer),
+        loudness: loudnessOf(buffer),
+      });
     }
 
     // La vidéo porte sa propre piste audio, que le webview lirait en plus du
