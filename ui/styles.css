@@ -130,7 +130,13 @@ header::after {
   border: 1px solid var(--border);
   font-size: 13px;
   color: var(--text-dim);
+  /* La liste des pistes peut être longue : le voyant se tronque au lieu de
+     pousser les boutons hors de la fenêtre. */
+  max-width: 42ch;
+  white-space: nowrap;
+  overflow: hidden;
 }
+.status > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 
 .dot {
   width: 8px; height: 8px;
@@ -447,7 +453,27 @@ video {
   gap: 6px;
   overflow-y: auto;
 }
-.panel h2 { margin: 0 0 4px; font-size: 15px; font-weight: 650; letter-spacing: -0.25px; }
+.panel h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.25px;
+  /* Le nom du clip peut être long : il se tronque plutôt que de repousser le
+     reste du panneau. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Les actions restent visibles quand la liste de pistes défile : sur six
+   pistes, Exporter sortait du champ et l'on croyait le bouton absent. */
+.panel-actions {
+  position: sticky;
+  bottom: -20px;
+  margin: 16px -20px -22px;
+  padding: 14px 20px 20px;
+  background: linear-gradient(180deg, transparent, var(--surface) 22%);
+}
 .panel .hint { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
 /* Un avertissement doit se distinguer d'une simple indication : sans cela, une
    écoute en direct hors service passait pour un texte d'aide anodin. */

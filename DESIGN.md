@@ -80,10 +80,29 @@ l'autre, différente d'un clip à l'autre, et cantonnée à la famille indigo-vi
 de l'accent. On reconnaît sa carte à sa couleur, et la grille cesse d'être une
 liste grise.
 
+## Rien ne doit pouvoir pousser l'interface hors du cadre
+
+Trois débordements corrigés, tous dus à du contenu de longueur imprévisible :
+
+- Le **voyant d'état** liste les pistes détectées : tronqué à 42 caractères,
+  sinon il repoussait les boutons hors de la fenêtre.
+- Le **nom du clip** dans l'éditeur : tronqué, sinon il élargissait le panneau.
+- Les **actions du panneau** (Exporter, Supprimer) sont collées en bas et
+  restent visibles quand la liste de pistes défile. Sur six pistes, Exporter
+  sortait du champ et l'on croyait le bouton absent.
+
+## Adaptation aux tailles
+
+Trois paliers, pas plus :
+
+| | |
+|---|---|
+| **≥ 1600 px** | la grille respire au lieu de s'étirer |
+| **≤ 1080 px** | le mixage passe sous le lecteur — une colonne de 360 px sur 900 px de large ne laisse plus rien à la vidéo |
+| **≤ 760 px** | l'en-tête se réorganise, les actions restent atteignables |
+
 ## Ce qui reste à faire
 
-- Transition continue entre la carte et le lecteur, plutôt qu'un basculement de
-  vue.
-- Vraies vignettes, extraites une fois pour toutes à la sauvegarde plutôt que
-  décodées à l'affichage.
+- **Persister les vignettes** : elles sont extraites à chaque session. Les
+  écrire à côté du clip à la sauvegarde éviterait ce travail répété.
 - Mode clair, si un usage hors jeu le justifie un jour.
