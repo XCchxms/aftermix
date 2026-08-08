@@ -110,7 +110,12 @@ async function loadLibrary() {
     // Cascade plafonnée : au-delà d'une douzaine de cartes, l'attente cesse
     // d'être élégante pour devenir une lenteur.
     card.style.animationDelay = `${Math.min(position, 12) * 35}ms`;
-    card.onclick = () => openEditor(clip);
+    card.onclick = () => {
+      // La carte se soulève avant que l'éditeur prenne la place : sans ce
+      // court délai, le mouvement n'a pas le temps d'être perçu.
+      card.classList.add("opening");
+      setTimeout(() => openEditor(clip), 130);
+    };
 
     // Signature visuelle du clip.
     //
@@ -119,11 +124,11 @@ async function loadLibrary() {
     // place, une teinte dérivée du nom — stable pour un clip donné, différente
     // d'un clip à l'autre. On reconnaît sa carte à sa couleur, et la grille
     // cesse d'être une liste grise.
-    const hue = hueOf(clip.name);
+    // Fond neutre en attendant la vignette : une couleur vive qui disparaît
+    // ensuite ferait clignoter la grille au chargement.
     const cover = document.createElement("div");
     cover.className = "cover";
-    cover.style.background =
-      `linear-gradient(135deg, hsl(${hue} 62% 46%), hsl(${(hue + 48) % 360} 58% 34%))`;
+    cover.dataset.path = clip.path;
 
     const duration = document.createElement("span");
     duration.className = "cover-duration";
@@ -154,20 +159,82 @@ async function loadLibrary() {
     card.append(cover, title, meta, chips);
     grid.appendChild(card);
   });
+
+  // Après l'affichage : la grille est utilisable immédiatement, les vignettes
+  // se posent au fur et à mesure.
+  extractThumbnails(clips);
 }
 
-/// Teinte stable dérivée d'une chaîne, entre 0 et 359.
+/// Vignettes déjà extraites, par chemin de clip.
+const thumbnails = new Map();
+
+/// Extrait une image de chaque clip, l'une après l'autre.
 ///
-/// Le même clip garde sa couleur d'une session à l'autre : c'est ce qui permet
-/// de le retrouver d'un coup d'œil sans lire son nom.
-function hueOf(text) {
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    hash = (hash * 31 + text.charCodeAt(i)) % 360;
+/// Un lecteur vidéo temporaire, une image dessinée sur un canvas, puis le
+/// lecteur est détruit. C'est ce qui distingue cette approche des aperçus
+/// retirés plus tôt : ceux-là gardaient un décodeur ouvert par carte en
+/// permanence et saturaient le moteur de rendu. Ici un seul existe à la fois,
+/// et seulement le temps d'une image.
+///
+/// Séquentiel à dessein : décoder six vidéos en parallèle produirait exactement
+/// la saturation qu'on cherche à éviter.
+async function extractThumbnails(clips) {
+  for (const clip of clips) {
+    if (thumbnails.has(clip.path)) {
+      paintThumbnail(clip.path);
+      continue;
+    }
+    try {
+      const image = await grabFrame(convertFileSrc(clip.path));
+      thumbnails.set(clip.path, image);
+      paintThumbnail(clip.path);
+    } catch {
+      // Un clip illisible garde sa couverture unie : ce n'est pas une raison
+      // d'interrompre l'extraction des suivants.
+    }
   }
-  // Décalage vers les indigos et violets, pour rester dans la famille de
-  // l'accent plutôt que de piocher au hasard dans tout le spectre.
-  return (hash * 0.45 + 220) % 360;
+}
+
+/// Rend une image du clip, prise un peu après le début.
+function grabFrame(url) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.preload = "metadata";
+    video.src = url;
+
+    const cleanup = () => {
+      video.removeAttribute("src");
+      video.load();
+    };
+
+    video.onloadedmetadata = () => {
+      // Une seconde après le début : la toute première image est souvent noire
+      // ou incomplète, le temps que l'encodeur se cale.
+      video.currentTime = Math.min(1, (video.duration || 2) / 4);
+    };
+    video.onseeked = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 480;
+      canvas.height = Math.round((video.videoHeight / video.videoWidth) * 480) || 270;
+      canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+      cleanup();
+      resolve(canvas.toDataURL("image/jpeg", 0.72));
+    };
+    video.onerror = () => {
+      cleanup();
+      reject(new Error("clip illisible"));
+    };
+  });
+}
+
+function paintThumbnail(path) {
+  const cover = document.querySelector(`.cover[data-path="${CSS.escape(path)}"]`);
+  const image = thumbnails.get(path);
+  if (cover && image) {
+    cover.style.backgroundImage = `url(${image})`;
+    cover.classList.add("has-image");
+  }
 }
 
 // ──────────────────────────────── éditeur ──────────────────────────────────
