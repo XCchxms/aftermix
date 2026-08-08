@@ -119,6 +119,29 @@ export class Preview {
     return pairs;
   }
 
+  /// Niveau courant de chaque piste, entre 0 et 1.
+  ///
+  /// Destiné à l'affichage : la valeur est déjà lissée par l'analyseur, et une
+  /// racine carrée l'étale vers le haut pour que les niveaux faibles restent
+  /// visibles — un vumètre linéaire paraît éteint la plupart du temps.
+  levels() {
+    const levels = new Map();
+    if (!this.playing) return levels;
+
+    for (const [index, track] of this.tracks) {
+      if (!track.source) {
+        levels.set(index, 0);
+        continue;
+      }
+      track.analyser.getByteFrequencyData(track.bins);
+      let sum = 0;
+      for (const value of track.bins) sum += value;
+      const average = sum / track.bins.length / 255;
+      levels.set(index, Math.min(1, Math.sqrt(average) * 1.4));
+    }
+    return levels;
+  }
+
   /// Propose un équilibre entre les pistes audibles.
   ///
   /// Le principe : amener chaque source au même niveau perçu, puis appliquer
@@ -198,10 +221,21 @@ export class Preview {
 
     for (const { index, buffer } of decoded) {
       const gainNode = this.context.createGain();
-      gainNode.connect(this.context.destination);
+
+      // Un analyseur par piste, branché **après** le gain : le vumètre montre
+      // ce qu'on entend réellement, pas ce que contient le fichier. Baisser un
+      // fader fait retomber sa barre, ce qui rend le réglage lisible à l'œil
+      // autant qu'à l'oreille.
+      const analyser = this.context.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.7;
+      gainNode.connect(analyser);
+      analyser.connect(this.context.destination);
       this.tracks.set(index, {
         buffer,
         gainNode,
+        analyser,
+        bins: new Uint8Array(analyser.frequencyBinCount),
         source: null,
         peak: peakOf(buffer),
         loudness: loudnessOf(buffer),

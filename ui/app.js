@@ -246,6 +246,12 @@ function buildTrack(track) {
   const row = document.createElement("div");
   row.className = "track";
 
+  // Vumètre : une barre fine sous le libellé, qui vit pendant la lecture.
+  const meter = document.createElement("div");
+  meter.className = "meter";
+  const level = document.createElement("span");
+  meter.appendChild(level);
+
   const head = document.createElement("div");
   head.className = "track-head";
 
@@ -285,7 +291,7 @@ function buildTrack(track) {
   slider.oninput = () => { muted = false; mute.classList.remove("on"); apply(); };
   mute.onclick = () => { muted = !muted; mute.classList.toggle("on", muted); apply(); };
 
-  row.append(head, slider);
+  row.append(head, meter, slider);
   return row;
 }
 
@@ -487,6 +493,21 @@ player.addEventListener("ended", () => preview.stop());
 // Surveillance de la dérive : les horloges du webview et de la carte son sont
 // indépendantes, un écart s'installe lentement et doit être rattrapé.
 setInterval(() => preview.tick(), 500);
+
+// Animation des vumètres, calée sur le rafraîchissement de l'écran.
+//
+// Une boucle d'animation ne coûte rien quand rien ne joue : `levels()` rend
+// une table vide et l'on sort aussitôt. Le navigateur la suspend d'ailleurs
+// dès que la fenêtre passe en arrière-plan.
+function animateMeters() {
+  const levels = preview?.levels?.() ?? new Map();
+  for (const [index, level] of levels) {
+    const bar = trackRows.get(index)?.querySelector(".meter span");
+    if (bar) bar.style.transform = `scaleX(${level.toFixed(3)})`;
+  }
+  requestAnimationFrame(animateMeters);
+}
+requestAnimationFrame(animateMeters);
 
 // ── réglages ──
 el("settings").onclick = openSettings;

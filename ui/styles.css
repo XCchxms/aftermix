@@ -253,6 +253,30 @@ video {
 .mute:hover { background: var(--surface-hover); }
 .mute.on { background: rgba(255, 92, 106, 0.15); border-color: rgba(255, 92, 106, 0.4); }
 
+/* Vumètre : une barre qui suit le niveau réellement entendu, gain compris. */
+.meter {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+  margin: 0 0 10px;
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent) 0%, #8f7bff 60%, var(--live) 100%);
+  /* Descente amortie : c'est ainsi qu'un vumètre se lit. */
+  transition: transform 0.12s ease-out;
+}
+
+.track.muted .meter span,
+.track.silent .meter span { opacity: 0.3; }
+
 input[type="range"] {
   -webkit-appearance: none;
   width: 100%; height: 4px;
