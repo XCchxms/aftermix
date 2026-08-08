@@ -147,6 +147,20 @@ WebView2 du système, présent d'origine sur Windows 11.
 À comparer aux ~150 Mo d'une application Electron équivalente : c'est ce que
 valait le choix de Rust + Tauri pour un logiciel censé tourner en permanence.
 
+### Installer sur une autre machine
+
+L'installeur fonctionne tel quel, mais **Windows affichera un avertissement**
+tant que le binaire n'est pas signé. À transmettre aux testeurs :
+
+1. Lancer `SmartClip Studio_0.1.0_x64-setup.exe`
+2. Sur l'écran bleu « Windows a protégé votre ordinateur » →
+   **Informations complémentaires** → **Exécuter quand même**
+3. L'installation ne demande aucun droit administrateur
+
+Certains antivirus peuvent aussi réagir : une application qui capture l'écran et
+l'audio de plusieurs processus présente le profil qu'ils surveillent. Il faudra
+parfois ajouter une exception.
+
 ⚠️ **L'installeur n'est pas signé.** SmartScreen affichera un avertissement et
 certains antivirus pourront réagir : une application qui capture l'écran et
 l'audio de plusieurs processus présente exactement le profil qu'ils surveillent.

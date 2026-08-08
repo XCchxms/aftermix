@@ -341,6 +341,8 @@ async function openSettings() {
   el("outputDir").value = settings.output_dir;
   el("hotkey").value = settings.hotkey;
   el("voicePhrase").value = settings.voice_phrase ?? "";
+  el("autoStart").checked = settings.auto_start ?? true;
+  el("launchAtLogin").checked = settings.launch_at_login ?? false;
   renderBufferChoices();
   await renderHotkeyState();
   await renderVoiceState();
@@ -407,6 +409,8 @@ async function saveSettings() {
       output_dir: el("outputDir").value.trim(),
       hotkey: el("hotkey").value.trim() || "Ctrl+Shift+X",
       voice_phrase: el("voicePhrase").value.trim(),
+      auto_start: el("autoStart").checked,
+      launch_at_login: el("launchAtLogin").checked,
     },
   });
   await renderVoiceState();
@@ -511,4 +515,21 @@ setInterval(async () => {
   state.recording = await call("is_recording");
   renderStatus(state.recording ? await call("current_tracks") : []);
   await loadLibrary();
+
+  // Démarrage automatique du buffer.
+  //
+  // Un clip manqué parce qu'on avait oublié de lancer l'enregistrement est le
+  // pire défaut possible pour ce produit : l'occasion ne repasse pas. Le coût
+  // inverse — un buffer qui tourne pour rien — se compte en quelques pour cent
+  // de processeur.
+  const settings = await invoke("get_settings").catch(() => null);
+  if (settings?.auto_start && !state.recording) {
+    try {
+      const tracks = await invoke("start_recording");
+      state.recording = true;
+      renderStatus(tracks);
+    } catch (error) {
+      toast(`Démarrage automatique impossible : ${error}`, true);
+    }
+  }
 })();

@@ -59,6 +59,21 @@ struct Settings {
     /// Phrase d'activation vocale. Vide = écoute désactivée.
     #[serde(default)]
     voice_phrase: String,
+    /// Démarre le buffer dès l'ouverture de l'application.
+    ///
+    /// Activé par défaut : le pire défaut de ce produit est un clip manqué
+    /// parce qu'on avait oublié de lancer l'enregistrement. Le coût d'un buffer
+    /// qui tourne pour rien est de quelques pour cent de processeur ; celui
+    /// d'un moment perdu est définitif.
+    #[serde(default = "yes")]
+    auto_start: bool,
+    /// Lance l'application à l'ouverture de session Windows.
+    #[serde(default)]
+    launch_at_login: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 fn default_hotkey() -> String {
@@ -77,6 +92,8 @@ impl Default for Settings {
             // Désactivée par défaut : écouter le micro en permanence doit
             // rester un choix explicite de l'utilisateur.
             voice_phrase: String::new(),
+            auto_start: true,
+            launch_at_login: false,
         }
     }
 }
@@ -171,6 +188,48 @@ fn voice_status(state: State<'_, AppState>) -> HotkeyStatus {
     state.voice_status.lock().unwrap().clone()
 }
 
+/// Clé de registre du démarrage automatique de Windows.
+///
+/// `HKCU` plutôt que `HKLM` : l'entrée ne concerne que l'utilisateur courant et
+/// n'exige aucun droit administrateur, ce qui va de pair avec un installeur
+/// par utilisateur.
+const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+const RUN_VALUE: &str = "SmartClip Studio";
+
+/// Inscrit ou retire l'application du démarrage de Windows.
+fn apply_launch_at_login(enabled: bool) -> Result<(), String> {
+    let exe = std::env::current_exe()
+        .map_err(|e| format!("chemin de l'exécutable introuvable : {e}"))?;
+    // `reg` évite une dépendance au registre pour deux écritures, et son échec
+    // se lit dans le code de retour.
+    let status = if enabled {
+        std::process::Command::new("reg")
+            .args([
+                "add",
+                &format!(r"HKCU\{RUN_KEY}"),
+                "/v",
+                RUN_VALUE,
+                "/t",
+                "REG_SZ",
+                "/d",
+                &format!("\"{}\"", exe.display()),
+                "/f",
+            ])
+            .status()
+    } else {
+        std::process::Command::new("reg")
+            .args(["delete", &format!(r"HKCU\{RUN_KEY}"), "/v", RUN_VALUE, "/f"])
+            .status()
+    };
+
+    match status {
+        // La suppression d'une entrée absente renvoie une erreur : sans
+        // conséquence, l'état voulu est atteint.
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("registre inaccessible : {e}")),
+    }
+}
+
 impl Default for AppState {
     fn default() -> Self {
         Self {
@@ -248,6 +307,7 @@ fn set_settings(
     settings.persist().map_err(|e| format!("{e:#}"))?;
     let combination = settings.hotkey.clone();
     let phrase = settings.voice_phrase.clone();
+    apply_launch_at_login(settings.launch_at_login)?;
     *state.settings.lock().unwrap() = settings;
     // Raccourci et phrase prennent effet immédiatement : les laisser attendre
     // un redémarrage donnerait l'impression qu'ils ne marchent pas.

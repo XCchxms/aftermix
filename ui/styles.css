@@ -342,6 +342,17 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
 .dialog .hint { font-size: 12px; color: var(--text-dim); margin-top: 10px; line-height: 1.6; }
 .dialog .hint.warn { color: #ffbe5c; }
 .dialog label .optional { color: var(--text-dim); font-weight: 400; }
+
+.dialog label.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.dialog label.check input { accent-color: var(--accent); width: 15px; height: 15px; }
 .dialog .hint b { color: var(--text); }
 
 .dialog-actions {
