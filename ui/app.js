@@ -104,9 +104,12 @@ async function loadLibrary() {
   grid.innerHTML = "";
   el("empty").classList.toggle("hidden", clips.length > 0);
 
-  for (const clip of clips) {
+  clips.forEach((clip, position) => {
     const card = document.createElement("div");
     card.className = "card";
+    // Cascade plafonnée : au-delà d'une douzaine de cartes, l'attente cesse
+    // d'être élégante pour devenir une lenteur.
+    card.style.animationDelay = `${Math.min(position, 12) * 35}ms`;
     card.onclick = () => openEditor(clip);
 
     // Pas d'aperçu vidéo dans les cartes.
@@ -135,7 +138,7 @@ async function loadLibrary() {
 
     card.append(title, meta, chips);
     grid.appendChild(card);
-  }
+  });
 }
 
 // ──────────────────────────────── éditeur ──────────────────────────────────

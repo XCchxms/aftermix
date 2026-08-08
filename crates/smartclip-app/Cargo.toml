@@ -22,6 +22,9 @@ tauri-plugin-global-shortcut = "2"
 # Notification système à la sauvegarde : l'utilisateur joue en plein écran et ne
 # doit pas avoir à ouvrir la fenêtre pour savoir que son clip est pris.
 tauri-plugin-notification = "2"
+# Une seule instance : deux applications lancées, ce sont deux buffers qui
+# capturent l'écran en parallèle.
+tauri-plugin-single-instance = "2"
 
 # Media Foundation doit être démarré pour toute la vie de l'application, pas
 # seulement pendant que le moteur tourne.

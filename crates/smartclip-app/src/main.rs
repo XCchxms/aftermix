@@ -712,6 +712,18 @@ fn main() {
         .init();
 
     tauri::Builder::default()
+        // Instance unique, déclarée en premier comme l'exige le plugin.
+        //
+        // L'application vit dans la barre système et se ferme par sa croix sans
+        // quitter : relancer le raccourci du bureau créait donc une seconde
+        // instance, avec son propre buffer capturant le même écran. Deux
+        // captures simultanées doublent la charge et se disputent l'encodeur.
+        // Le second lancement se contente désormais de ramener la fenêtre
+        // existante au premier plan.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            tracing::info!("instance déjà lancée : fenêtre existante ramenée au premier plan");
+            show_window(app);
+        }))
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()

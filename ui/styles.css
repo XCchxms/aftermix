@@ -15,6 +15,9 @@
   --live: #2ee6a8;
   --radius: 14px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  /* Ombre teintée de l'accent plutôt que noire : sur fond sombre, une ombre
+     neutre salit, une ombre colorée fait rayonner. */
+  --shadow-accent: 0 12px 34px rgba(106, 92, 255, 0.22);
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
@@ -108,6 +111,14 @@ header {
 
 main { flex: 1; overflow-y: auto; padding: 24px; }
 
+/* Chaque vue entre par un léger glissement : le passage bibliothèque ↔ éditeur
+   se lit comme un déplacement, pas comme un remplacement brutal. */
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+main > section:not(.hidden) { animation: view-in 0.28s var(--ease); }
+
 /* ────────────────────────────── bibliothèque ───────────────────────────── */
 
 .grid {
@@ -127,8 +138,19 @@ main { flex: 1; overflow-y: auto; padding: 24px; }
 }
 .card:hover {
   transform: translateY(-3px);
-  border-color: #333849;
-  box-shadow: var(--shadow);
+  border-color: rgba(106, 92, 255, 0.4);
+  box-shadow: var(--shadow-accent);
+}
+
+/* Les cartes se posent en cascade au chargement : le décalage donne le sens de
+   lecture au lieu de faire apparaître un bloc d'un coup. */
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+.card {
+  opacity: 0;
+  animation: card-in 0.34s var(--ease) forwards;
 }
 
 .thumb-frame { position: relative; margin-bottom: 12px; }
@@ -178,10 +200,44 @@ main { flex: 1; overflow-y: auto; padding: 24px; }
 .empty {
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  height: 100%; gap: 10px;
+  min-height: 60vh; gap: 12px;
   color: var(--text-dim); text-align: center;
+  animation: card-in 0.5s var(--ease);
 }
-.empty strong { color: var(--text); font-size: 16px; }
+.empty strong { color: var(--text); font-size: 17px; }
+.empty > div { max-width: 380px; line-height: 1.6; }
+
+/* Trois barres qui pulsent : l'écran vide montre ce que fait l'application
+   plutôt que de constater qu'il ne s'est rien passé. */
+.empty-mark { display: flex; align-items: flex-end; gap: 5px; height: 42px; margin-bottom: 6px; }
+.empty-mark span {
+  width: 5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--accent), #8f7bff);
+  animation: listening 1.5s ease-in-out infinite;
+}
+.empty-mark span:nth-child(1) { height: 40%; animation-delay: 0s; }
+.empty-mark span:nth-child(2) { height: 100%; animation-delay: 0.18s; }
+.empty-mark span:nth-child(3) { height: 62%; animation-delay: 0.36s; }
+
+@keyframes listening {
+  0%, 100% { transform: scaleY(0.45); opacity: 0.55; }
+  50%      { transform: scaleY(1); opacity: 1; }
+}
+
+.empty-steps {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 18px; font-size: 12.5px;
+}
+.empty-steps span { display: flex; align-items: center; gap: 10px; }
+.empty-steps b {
+  width: 20px; height: 20px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: #b9b2ff;
+  font-size: 11px;
+}
 
 /* ─────────────────────────────── éditeur ──────────────────────────────── */
 
