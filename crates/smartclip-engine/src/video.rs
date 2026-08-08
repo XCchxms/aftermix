@@ -39,8 +39,10 @@ pub struct Capture {
     textures: Vec<ID3D11Texture2D>,
     pub width: u32,
     pub height: u32,
-    /// Tant qu'aucune frame n'est arrivée, il n'y a rien à répéter.
-    has_content: bool,
+    /// Emplacement contenant la dernière image réellement capturée.
+    ///
+    /// `None` tant qu'aucune n'est arrivée : il n'y a alors rien à répéter.
+    last_valid: Option<usize>,
 }
 
 impl Capture {
@@ -89,7 +91,7 @@ impl Capture {
             textures,
             width,
             height,
-            has_content: false,
+            last_valid: None,
         })
     }
 
@@ -143,20 +145,20 @@ impl Capture {
                 let access: IDirect3DDxgiInterfaceAccess = surface.cast()?;
                 let source: ID3D11Texture2D = unsafe { access.GetInterface()? };
                 unsafe { self.context.CopyResource(&self.textures[slot], &source) };
-                self.has_content = true;
+                self.last_valid = Some(slot);
                 drop(frame);
                 Ok(Some((&self.textures[slot], true)))
             }
-            Err(_) if self.has_content => {
-                let previous = (index as usize + TEXTURE_RING - 1) % TEXTURE_RING;
-                // Cloner une interface COM n'est qu'un AddRef : c'est la façon
-                // la plus simple d'obtenir les deux emprunts distincts qu'exige
-                // `CopyResource`.
-                let source = self.textures[previous].clone();
-                unsafe { self.context.CopyResource(&self.textures[slot], &source) };
-                Ok(Some((&self.textures[slot], false)))
-            }
-            Err(_) => Ok(None),
+            // Aucune image neuve : on réutilise la dernière **sans la recopier**.
+            //
+            // La dupliquer dans l'emplacement courant coûtait une copie GPU de
+            // 8 Mo, soixante fois par seconde, pour un contenu identique — et
+            // c'est le cas dès que rien ne bouge à l'écran, soit l'essentiel du
+            // temps hors jeu. La rendre telle quelle donne exactement le même
+            // résultat encodé.
+            Err(_) => Ok(self
+                .last_valid
+                .map(|valid| (&self.textures[valid], false))),
         }
     }
 
