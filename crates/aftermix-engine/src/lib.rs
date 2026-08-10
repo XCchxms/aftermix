@@ -1,4 +1,4 @@
-//! Moteur SmartClip : buffer vidéo permanent et sauvegarde multi-pistes.
+//! Moteur Aftermix : buffer vidéo permanent et sauvegarde multi-pistes.
 //!
 //! Ce crate est la mise en commun des quatre prototypes de la Phase 0, dont
 //! chacun a validé un risque avant d'être écrit ici. Les contraintes qu'ils ont
@@ -21,7 +21,7 @@ pub use export::{ClipInfo, MixOutcome, mix_and_export};
 pub use library::{Clip, ClipMeta};
 pub use recorder::{Recorder, SaveOutcome};
 
-use smartclip_core::clock::HNS_PER_SEC;
+use aftermix_core::clock::HNS_PER_SEC;
 
 /// Fréquence d'échantillonnage de travail, commune à toutes les pistes.
 pub const SAMPLE_RATE: u32 = 48_000;
@@ -103,7 +103,7 @@ impl Default for Config {
             track_slots: 6,
             capture_microphone: true,
             microphone: None,
-            workdir: std::env::temp_dir().join("smartclip"),
+            workdir: std::env::temp_dir().join("aftermix"),
         }
     }
 }

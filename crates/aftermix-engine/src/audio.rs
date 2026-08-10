@@ -33,7 +33,7 @@ use windows::Win32::System::Threading::{
 use windows::Win32::System::Variant::{VT_BLOB, VT_LPWSTR};
 use windows::core::{Interface, PCWSTR, PWSTR, Ref, implement};
 
-use smartclip_core::clock::{MasterClock, QpcInstant};
+use aftermix_core::clock::{MasterClock, QpcInstant};
 
 use crate::{CHANNELS, SAMPLE_RATE, hns_since_boot};
 

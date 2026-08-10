@@ -1,8 +1,8 @@
-//! SmartClip Studio — interface.
+//! Aftermix — interface.
 //!
 //! Cette couche ne contient aucune logique multimédia : elle expose le moteur à
 //! la vue et rien de plus. Tout ce qui touche à la capture, au mixage ou aux
-//! métadonnées vit dans `smartclip-engine`, où il reste testable sans fenêtre.
+//! métadonnées vit dans `aftermix-engine`, où il reste testable sans fenêtre.
 
 // Empêche la console d'apparaître derrière la fenêtre en release. En debug on
 // la garde : c'est là que sortent les traces du moteur.
@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
-use smartclip_engine::{Config, Recorder, library};
+use aftermix_engine::{Config, Recorder, library};
 use windows::Win32::Media::MediaFoundation::{MF_VERSION, MFSTARTUP_FULL, MFShutdown, MFStartup};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
@@ -129,8 +129,8 @@ fn default_hotkey() -> String {
 impl Default for Settings {
     fn default() -> Self {
         let videos = std::env::var("USERPROFILE")
-            .map(|home| PathBuf::from(home).join("Videos").join("SmartClip"))
-            .unwrap_or_else(|_| std::env::temp_dir().join("SmartClip"));
+            .map(|home| PathBuf::from(home).join("Videos").join("Aftermix"))
+            .unwrap_or_else(|_| std::env::temp_dir().join("Aftermix"));
         Self {
             buffer_seconds: 60.0,
             output_dir: videos.to_string_lossy().into_owned(),
@@ -149,10 +149,16 @@ impl Default for Settings {
     }
 }
 
+/// Nom sous lequel l'application s'est appelée avant d'être renommée.
+///
+/// Conservé pour une seule raison : retrouver les réglages d'une installation
+/// antérieure. À supprimer quand plus personne ne viendra de cette version.
+const FORMER_NAME: &str = "SmartClip";
+
 impl Settings {
     fn file() -> Option<PathBuf> {
         let base = std::env::var("APPDATA").ok()?;
-        Some(PathBuf::from(base).join("SmartClip").join("settings.json"))
+        Some(PathBuf::from(base).join("Aftermix").join("settings.json"))
     }
 
     /// Relit les réglages, ou rend ceux par défaut.
@@ -160,10 +166,35 @@ impl Settings {
     /// Un fichier illisible ou corrompu ne bloque pas le démarrage : mieux vaut
     /// repartir des valeurs par défaut que refuser d'ouvrir l'application.
     fn load() -> Self {
-        Self::file()
-            .and_then(|path| std::fs::read_to_string(path).ok())
-            .and_then(|raw| serde_json::from_str(&raw).ok())
-            .unwrap_or_default()
+        if let Some(raw) = Self::file().and_then(|path| std::fs::read_to_string(path).ok()) {
+            return serde_json::from_str(&raw).unwrap_or_default();
+        }
+        // Reprise de l'ancien emplacement, réécrite aussitôt au nouveau : sans
+        // cela l'ancien dossier resterait la source de vérité indéfiniment, et
+        // le supprimer réinitialiserait tout sans prévenir.
+        let Some(settings) = Self::read_former() else {
+            return Self::default();
+        };
+        if let Err(e) = settings.persist() {
+            tracing::warn!("réglages repris mais non réécrits : {e:#}");
+        }
+        settings
+    }
+
+    /// Réglages laissés par l'ancien nom de l'application.
+    ///
+    /// Le renommage déplace le dossier de configuration. Sans cette reprise,
+    /// une mise à jour rendrait silencieusement au raccourci, à la phrase
+    /// vocale et surtout au dossier de clips leurs valeurs par défaut — et
+    /// l'utilisateur croirait sa bibliothèque perdue alors qu'elle est intacte
+    /// à l'ancien emplacement.
+    fn read_former() -> Option<Self> {
+        let base = std::env::var("APPDATA").ok()?;
+        let path = PathBuf::from(base).join(FORMER_NAME).join("settings.json");
+        let raw = std::fs::read_to_string(&path).ok()?;
+        let settings = serde_json::from_str(&raw).ok()?;
+        tracing::info!("réglages repris de {}", path.display());
+        Some(settings)
     }
 
     fn persist(&self) -> anyhow::Result<()> {
@@ -190,7 +221,7 @@ struct AppState {
     recorder: Mutex<Option<Recorder>>,
     settings: Mutex<Settings>,
     hotkey: Mutex<HotkeyStatus>,
-    voice: Mutex<Option<smartclip_engine::voice::VoiceTrigger>>,
+    voice: Mutex<Option<aftermix_engine::voice::VoiceTrigger>>,
     voice_status: Mutex<HotkeyStatus>,
 }
 
@@ -216,7 +247,7 @@ fn apply_voice(app: &AppHandle, phrase: &str) -> HotkeyStatus {
     }
 
     let handle = app.clone();
-    match smartclip_engine::voice::VoiceTrigger::start(phrase, move || {
+    match aftermix_engine::voice::VoiceTrigger::start(phrase, move || {
         save_from_shortcut(&handle);
     }) {
         Ok(trigger) => {
@@ -245,12 +276,26 @@ fn voice_status(state: State<'_, AppState>) -> HotkeyStatus {
 /// n'exige aucun droit administrateur, ce qui va de pair avec un installeur
 /// par utilisateur.
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-const RUN_VALUE: &str = "SmartClip Studio";
+const RUN_VALUE: &str = "Aftermix";
 
 /// Inscrit ou retire l'application du démarrage de Windows.
 fn apply_launch_at_login(enabled: bool) -> Result<(), String> {
     let exe = std::env::current_exe()
         .map_err(|e| format!("chemin de l'exécutable introuvable : {e}"))?;
+
+    // L'entrée de l'ancien nom pointe vers un exécutable qui n'existe plus.
+    // Laissée en place, Windows tenterait de la lancer à chaque ouverture de
+    // session — un échec silencieux et permanent.
+    let _ = std::process::Command::new("reg")
+        .args([
+            "delete",
+            &format!(r"HKCU\{RUN_KEY}"),
+            "/v",
+            "SmartClip Studio",
+            "/f",
+        ])
+        .status();
+
     // `reg` évite une dépendance au registre pour deux écritures, et son échec
     // se lit dans le code de retour.
     let status = if enabled {
@@ -374,8 +419,8 @@ fn set_settings(
 /// proposerait des périphériques absents tout en cachant celui qu'on vient de
 /// connecter.
 #[tauri::command]
-fn list_microphones() -> Result<Vec<smartclip_engine::audio::InputDevice>, String> {
-    smartclip_engine::audio::list_inputs().map_err(|e| format!("{e:#}"))
+fn list_microphones() -> Result<Vec<aftermix_engine::audio::InputDevice>, String> {
+    aftermix_engine::audio::list_inputs().map_err(|e| format!("{e:#}"))
 }
 
 #[tauri::command]
@@ -423,7 +468,7 @@ fn backfill_thumbnails(app: AppHandle, state: State<'_, AppState>) {
                 return;
             }
         }
-        let created = smartclip_engine::export::backfill_thumbnails(&dir);
+        let created = aftermix_engine::export::backfill_thumbnails(&dir);
         unsafe {
             let _ = MFShutdown();
             CoUninitialize();
@@ -564,7 +609,7 @@ fn export_mix(
     output: Option<String>,
 ) -> Result<ExportView, String> {
     let source = PathBuf::from(source);
-    let info = smartclip_engine::export::inspect(&source).map_err(|e| format!("{e:#}"))?;
+    let info = aftermix_engine::export::inspect(&source).map_err(|e| format!("{e:#}"))?;
 
     let mut table = vec![0.0f32; info.audio_streams.len()];
     for (index, gain) in gains {
@@ -583,7 +628,7 @@ fn export_mix(
         ))
     });
 
-    let outcome = smartclip_engine::mix_and_export(&source, &output, &table)
+    let outcome = aftermix_engine::mix_and_export(&source, &output, &table)
         .map_err(|e| format!("{e:#}"))?;
 
     Ok(ExportView {
@@ -615,10 +660,10 @@ fn prepare_preview(source: String) -> Result<Vec<PreviewTrack>, String> {
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "clip".into());
-    let directory = std::env::temp_dir().join("smartclip_preview").join(&stem);
+    let directory = std::env::temp_dir().join("aftermix_preview").join(&stem);
 
     let files =
-        smartclip_engine::export::extract_tracks(&source, &directory).map_err(|e| format!("{e:#}"))?;
+        aftermix_engine::export::extract_tracks(&source, &directory).map_err(|e| format!("{e:#}"))?;
 
     // Les libellés viennent du sidecar : le WAV, lui, n'a pas de nom de piste.
     let labels = library::describe(&source)
@@ -655,7 +700,7 @@ fn clear_preview(source: String) {
     if stem.is_empty() {
         return;
     }
-    let _ = std::fs::remove_dir_all(std::env::temp_dir().join("smartclip_preview").join(stem));
+    let _ = std::fs::remove_dir_all(std::env::temp_dir().join("aftermix_preview").join(stem));
 }
 
 /// Ouvre un chemin dans l'explorateur Windows.
@@ -878,14 +923,14 @@ fn main() {
             apply_hotkey(app.handle(), &combination);
             apply_voice(app.handle(), &phrase);
 
-            let open = MenuItem::with_id(app, "open", "Ouvrir SmartClip", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Ouvrir Aftermix", true, None::<&str>)?;
             let save = MenuItem::with_id(app, "save", "Sauvegarder un clip", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &save, &quit])?;
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("SmartClip Studio")
+                .tooltip("Aftermix")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {

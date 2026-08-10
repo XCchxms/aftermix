@@ -14,7 +14,7 @@ use anyhow::{Context, Result, bail};
 use windows::Win32::Media::MediaFoundation::{MF_VERSION, MFSTARTUP_FULL, MFShutdown, MFStartup};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
-use smartclip_core::clock::{HNS_PER_SEC, MasterClock};
+use aftermix_core::clock::{HNS_PER_SEC, MasterClock};
 
 use crate::audio::{self, AudioChunk, Source};
 use crate::concat;
@@ -255,7 +255,7 @@ impl Recorder {
         let thread = {
             let (health, heartbeat) = (Arc::clone(&health), Arc::clone(&heartbeat));
             std::thread::Builder::new()
-                .name("smartclip-engine".into())
+                .name("aftermix-engine".into())
                 .spawn(move || engine_thread(config, command_rx, ready_tx, health, heartbeat))?
         };
 

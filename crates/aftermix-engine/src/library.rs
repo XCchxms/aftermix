@@ -156,7 +156,7 @@ mod tests {
 
     impl TempDir {
         fn new(tag: &str) -> Self {
-            let path = std::env::temp_dir().join(format!("smartclip_test_{tag}_{}", std::process::id()));
+            let path = std::env::temp_dir().join(format!("aftermix_test_{tag}_{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&path);
             std::fs::create_dir_all(&path).unwrap();
             Self(path)
@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn un_dossier_absent_donne_une_bibliotheque_vide() {
-        let missing = std::env::temp_dir().join("smartclip_dossier_qui_nexiste_pas");
+        let missing = std::env::temp_dir().join("aftermix_dossier_qui_nexiste_pas");
         assert!(scan(&missing).unwrap().is_empty());
     }
 

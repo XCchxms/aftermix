@@ -1,5 +1,5 @@
 [package]
-name = "smartclip-app"
+name = "aftermix-app"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ rust-version.workspace = true
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-smartclip-engine.workspace = true
+aftermix-engine.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -33,5 +33,5 @@ workspace = true
 features = ["Win32_Media_MediaFoundation", "Win32_System_Com"]
 
 [[bin]]
-name = "smartclip-studio"
+name = "aftermix"
 path = "src/main.rs"

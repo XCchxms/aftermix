@@ -5,4 +5,4 @@
 *.mkv
 
 # Sources generees par Tauri
-crates/smartclip-app/gen/
+crates/aftermix-app/gen/

@@ -74,7 +74,7 @@ use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 use windows::Win32::System::Variant::VT_BLOB;
 use windows::core::{GUID, HSTRING, Interface, PCWSTR, Ref, implement};
 
-use smartclip_core::clock::{HNS_PER_SEC, MasterClock, QpcInstant};
+use aftermix_core::clock::{HNS_PER_SEC, MasterClock, QpcInstant};
 
 const SAMPLE_RATE: u32 = 48_000;
 const CHANNELS: u16 = 2;

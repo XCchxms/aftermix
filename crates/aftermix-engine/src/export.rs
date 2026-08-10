@@ -33,7 +33,7 @@ use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
 use windows::Win32::System::Variant::VT_I8;
 use windows::core::{GUID, HSTRING};
 
-use smartclip_core::clock::HNS_PER_SEC;
+use aftermix_core::clock::HNS_PER_SEC;
 
 use crate::{CHANNELS, SAMPLE_RATE};
 

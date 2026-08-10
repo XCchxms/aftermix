@@ -22,7 +22,7 @@ use windows::Win32::Media::MediaFoundation::{
 };
 use windows::core::{GUID, HSTRING, Interface};
 
-use smartclip_core::clock::HNS_PER_SEC;
+use aftermix_core::clock::HNS_PER_SEC;
 
 use crate::{CHANNELS, SAMPLE_RATE};
 
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn le_balayage_efface_les_orphelins_anterieurs() {
-        let dir = std::env::temp_dir().join(format!("smartclip_sweep_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("aftermix_sweep_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
 

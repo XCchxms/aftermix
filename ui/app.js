@@ -1,4 +1,4 @@
-// SmartClip Studio — logique de la vue.
+// Aftermix — logique de la vue.
 //
 // Aucune règle métier ici : les indices de pistes, le filtrage des emplacements
 // vacants et le mixage viennent tous du moteur. Cette couche ne fait que
@@ -48,6 +48,9 @@ const formatDate = (epoch) =>
 
 function renderStatus(tracks) {
   el("status").classList.toggle("live", state.recording);
+  // Porté par le corps du document : c'est ce qui anime la marque, en haut à
+  // gauche, loin du voyant qui déclenche pourtant l'état.
+  document.body.classList.toggle("recording", state.recording);
   el("statusText").textContent = state.recording
     ? `Enregistre — ${tracks.filter((t) => !t.startsWith("(libre")).join(", ")}`
     : "Buffer arrêté";

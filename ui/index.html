@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>SmartClip Studio</title>
+  <title>Aftermix</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -10,8 +10,22 @@
     <header>
       <button class="btn ghost hidden" id="back">← Bibliothèque</button>
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        SmartClip <span>Studio</span>
+        <!-- Les trois faders du logo, curseurs en marche montante. Ils ne
+             bougent que pendant l'enregistrement : une marque qui s'agite en
+             permanence ne signale plus rien. -->
+        <svg class="brand-mark" viewBox="0 0 44 20" aria-hidden="true">
+          <g class="rails">
+            <rect x="5" y="2" width="2.4" height="16" rx="1.2"/>
+            <rect x="20.8" y="2" width="2.4" height="16" rx="1.2"/>
+            <rect x="36.6" y="2" width="2.4" height="16" rx="1.2"/>
+          </g>
+          <g class="caps">
+            <rect x="1" y="12.2" width="10.4" height="5.2" rx="2.6"/>
+            <rect x="16.8" y="7.4" width="10.4" height="5.2" rx="2.6"/>
+            <rect x="32.6" y="2.6" width="10.4" height="5.2" rx="2.6"/>
+          </g>
+        </svg>
+        Aftermix
       </div>
       <div class="spacer"></div>
       <div class="status" id="status" role="status">
@@ -186,7 +200,7 @@
               <span class="optional">facultatif</span>
             </span>
             <span class="field-note">Dis la phrase, le clip part. Laisse vide pour ne pas écouter le micro.</span>
-            <input type="text" id="voicePhrase" spellcheck="false" placeholder="ok smartclip" />
+            <input type="text" id="voicePhrase" spellcheck="false" placeholder="ok aftermix" />
             <div class="hint" id="voiceState"></div>
           </div>
 
@@ -222,7 +236,7 @@
           <div class="field">
             <div class="field-text">
               <span class="field-name">Lancer au démarrage de Windows</span>
-              <span class="field-note">SmartClip démarre en fond, dans la barre système.</span>
+              <span class="field-note">Aftermix démarre en fond, dans la barre système.</span>
             </div>
             <label class="switch">
               <input type="checkbox" id="launchAtLogin" aria-label="Lancer au démarrage de Windows" />

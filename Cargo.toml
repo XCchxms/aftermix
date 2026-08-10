@@ -1,6 +1,6 @@
-﻿[workspace]
+[workspace]
 resolver = "3"
-members = ["crates/smartclip-app", "crates/smartclip-core", "crates/smartclip-engine", "crates/spikes"]
+members = ["crates/aftermix-app", "crates/aftermix-core", "crates/aftermix-engine", "crates/spikes"]
 
 [workspace.package]
 version = "0.1.0"
@@ -9,8 +9,8 @@ rust-version = "1.85"
 publish = false
 
 [workspace.dependencies]
-smartclip-core = { path = "crates/smartclip-core" }
-smartclip-engine = { path = "crates/smartclip-engine" }
+aftermix-core = { path = "crates/aftermix-core" }
+aftermix-engine = { path = "crates/aftermix-engine" }
 windows = "0.62"
 windows-core = "0.62"
 anyhow = "1"

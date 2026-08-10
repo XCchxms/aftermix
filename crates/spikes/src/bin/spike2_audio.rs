@@ -42,7 +42,7 @@ use windows::Win32::System::Threading::{
 use windows::Win32::System::Variant::VT_BLOB;
 use windows::core::{Interface, PCWSTR, PWSTR, Ref, implement};
 
-use smartclip_core::clock::{MasterClock, QpcInstant};
+use aftermix_core::clock::{MasterClock, QpcInstant};
 
 /// Format de travail commun à toutes les pistes.
 ///
@@ -490,7 +490,7 @@ impl Args {
     fn parse() -> Result<Self> {
         let mut args = Args {
             seconds: 20,
-            outdir: std::env::temp_dir().join("smartclip_spike2"),
+            outdir: std::env::temp_dir().join("aftermix_spike2"),
             with_loopback: true,
             with_mic: true,
             discover_only: false,

@@ -9,6 +9,51 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "aftermix-app"
+version = "0.1.0"
+dependencies = [
+ "aftermix-engine",
+ "anyhow",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-notification",
+ "tauri-plugin-single-instance",
+ "tracing",
+ "tracing-subscriber",
+ "windows 0.62.2",
+]
+
+[[package]]
+name = "aftermix-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "parking_lot",
+ "tracing",
+ "windows 0.62.2",
+]
+
+[[package]]
+name = "aftermix-engine"
+version = "0.1.0"
+dependencies = [
+ "aftermix-core",
+ "anyhow",
+ "png 0.17.16",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+ "windows 0.62.2",
+ "windows-collections 0.3.2",
+ "windows-core 0.62.2",
+ "windows-future 0.3.2",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3171,51 +3216,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
-name = "smartclip-app"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "smartclip-engine",
- "tauri",
- "tauri-build",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-notification",
- "tauri-plugin-single-instance",
- "tracing",
- "tracing-subscriber",
- "windows 0.62.2",
-]
-
-[[package]]
-name = "smartclip-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "parking_lot",
- "tracing",
- "windows 0.62.2",
-]
-
-[[package]]
-name = "smartclip-engine"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "png 0.17.16",
- "serde",
- "serde_json",
- "smartclip-core",
- "tracing",
- "tracing-subscriber",
- "windows 0.62.2",
- "windows-collections 0.3.2",
- "windows-core 0.62.2",
- "windows-future 0.3.2",
-]
-
-[[package]]
 name = "socket2"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3277,8 +3277,8 @@ dependencies = [
 name = "spikes"
 version = "0.1.0"
 dependencies = [
+ "aftermix-core",
  "anyhow",
- "smartclip-core",
  "tracing",
  "tracing-subscriber",
  "windows 0.62.2",

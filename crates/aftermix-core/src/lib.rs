@@ -1,4 +1,4 @@
-//! Cœur du moteur SmartClip Studio.
+//! Cœur du moteur Aftermix.
 //!
 //! Cette crate ne connaît rien de l'interface : elle est pilotable en headless
 //! et c'est ce qui rend la partie temps réel testable en isolation.

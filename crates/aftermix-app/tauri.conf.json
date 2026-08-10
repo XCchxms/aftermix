@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SmartClip Studio",
+  "productName": "Aftermix",
   "version": "0.1.0",
-  "identifier": "com.smartclip.studio",
+  "identifier": "app.aftermix",
   "build": {
     "frontendDist": "../../ui"
   },
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "SmartClip Studio",
+        "title": "Aftermix",
         "width": 1180,
         "height": 780,
         "minWidth": 900,
@@ -45,10 +45,10 @@
     "active": true,
     "targets": ["nsis"],
     "icon": ["icons/icon.ico"],
-    "publisher": "SmartClip",
+    "publisher": "Aftermix",
     "category": "Utility",
     "shortDescription": "Capture de clips dont l'audio reste modifiable après coup",
-    "longDescription": "SmartClip Studio conserve en continu les dernières minutes de jeu et enregistre chaque application dans une piste audio distincte. On rééquilibre le jeu, Discord et le micro après l'enregistrement, puis on exporte sans réencoder la vidéo.",
+    "longDescription": "Aftermix conserve en continu les dernières minutes de jeu et enregistre chaque application dans une piste audio distincte. On rééquilibre le jeu, Discord et le micro après l'enregistrement, puis on exporte sans réencoder la vidéo.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",

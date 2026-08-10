@@ -1,15 +1,15 @@
-//! CLI du moteur SmartClip : buffer permanent et sauvegarde au raccourci.
+//! CLI du moteur Aftermix : buffer permanent et sauvegarde au raccourci.
 //!
 //! C'est l'étape 1 de la V1 — le moteur complet, pilotable, sans interface.
 //! L'interface Tauri appellera plus tard le même [`Recorder`].
 //!
-//! Usage : `cargo run --release --bin smartclip -- --buffer 60`
+//! Usage : `cargo run --release --bin aftermix -- --buffer 60`
 //! puis **Ctrl+Shift+X** pour sauvegarder, **Ctrl+C** pour quitter.
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
-use smartclip_engine::{Config, Recorder, recorder};
+use aftermix_engine::{Config, Recorder, recorder};
 use windows::Win32::Media::MediaFoundation::{MF_VERSION, MFSTARTUP_FULL, MFShutdown, MFStartup};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -33,7 +33,7 @@ struct Args {
 impl Args {
     fn parse() -> Result<Self> {
         let mut config = Config::default();
-        let mut output = dirs_videos().join("SmartClip");
+        let mut output = dirs_videos().join("Aftermix");
         let mut auto_save = None;
         let mut duration = None;
 
@@ -56,7 +56,7 @@ impl Args {
                 "--duration" => duration = Some(value()?.parse()?),
                 "--help" | "-h" => {
                     println!(
-                        "smartclip — buffer vidéo permanent, audio séparé par application\n\n\
+                        "aftermix — buffer vidéo permanent, audio séparé par application\n\n\
                          Options :\n  \
                          --buffer <s>     durée conservée en arrière (défaut 60)\n  \
                          --max-mb <Mo>    plafond disque (défaut 2048)\n  \
@@ -84,7 +84,7 @@ impl Args {
 
 /// Sous-commande `list` : la bibliothèque telle que l'interface l'affichera.
 fn run_list(directory: &std::path::Path) -> Result<()> {
-    let clips = smartclip_engine::library::scan(directory)?;
+    let clips = aftermix_engine::library::scan(directory)?;
     if clips.is_empty() {
         println!("aucun clip dans {}", directory.display());
         return Ok(());
@@ -251,7 +251,7 @@ fn clip_name() -> String {
     format!("clip_{stamp}.mp4")
 }
 
-fn report(outcome: &smartclip_engine::SaveOutcome) {
+fn report(outcome: &aftermix_engine::SaveOutcome) {
     tracing::info!(
         "✅ {} — {:.1}s, {:.0} Mo, {} pistes ({}), sauvegardé en {:.0} ms \
          (finalisation {:.0} ms + recollage {:.0} ms)",
@@ -276,7 +276,7 @@ fn dirs_videos() -> PathBuf {
 ///
 /// C'est ce que le mixeur de l'interface appellera, un fader par gain.
 fn run_mix(mut args: impl Iterator<Item = String>) -> Result<()> {
-    let input = PathBuf::from(args.next().context("usage : smartclip mix <clip.mp4> [options]")?);
+    let input = PathBuf::from(args.next().context("usage : aftermix mix <clip.mp4> [options]")?);
     let mut output = input.with_file_name(format!(
         "{}_mix.mp4",
         input
@@ -319,7 +319,7 @@ fn run_mix(mut args: impl Iterator<Item = String>) -> Result<()> {
 }
 
 fn run_mix_inner(input: &std::path::Path, output: &std::path::Path, mut gains: Vec<f32>) -> Result<()> {
-    let info = smartclip_engine::export::inspect(input)?;
+    let info = aftermix_engine::export::inspect(input)?;
     tracing::info!(
         "{} — {:.1}s, {} piste(s) audio",
         input.display(),
@@ -333,7 +333,7 @@ fn run_mix_inner(input: &std::path::Path, output: &std::path::Path, mut gains: V
         gains = vec![1.0; info.audio_streams.len()];
     }
 
-    let outcome = smartclip_engine::mix_and_export(input, output, &gains)?;
+    let outcome = aftermix_engine::mix_and_export(input, output, &gains)?;
     tracing::info!(
         "✅ {} — {:.1}s, {:.0} Mo, {} piste(s) mixée(s), crête {:.2}",
         output.display(),
@@ -372,7 +372,7 @@ fn main() -> Result<()> {
         // vérifier ici distingue un pilote muet d'un réglage mal appliqué, sans
         // avoir à ouvrir l'application.
         Some("mics") => {
-            for device in smartclip_engine::audio::list_inputs()? {
+            for device in aftermix_engine::audio::list_inputs()? {
                 let mark = if device.default { "*" } else { " " };
                 println!("{mark} {}\n    {}", device.name, device.id);
             }
@@ -382,16 +382,16 @@ fn main() -> Result<()> {
         // l'écoute en direct, et de quoi le vérifier sans interface.
         Some("tracks") => {
             raw.next();
-            let input = PathBuf::from(raw.next().context("usage : smartclip tracks <clip.mp4>")?);
+            let input = PathBuf::from(raw.next().context("usage : aftermix tracks <clip.mp4>")?);
             let out = raw
                 .next()
                 .map(PathBuf::from)
-                .unwrap_or_else(|| std::env::temp_dir().join("smartclip_tracks"));
+                .unwrap_or_else(|| std::env::temp_dir().join("aftermix_tracks"));
             unsafe {
                 let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
                 MFStartup(MF_VERSION, MFSTARTUP_FULL)?;
             }
-            let result = smartclip_engine::export::extract_tracks(&input, &out);
+            let result = aftermix_engine::export::extract_tracks(&input, &out);
             unsafe {
                 let _ = MFShutdown();
                 CoUninitialize();
@@ -409,12 +409,12 @@ fn main() -> Result<()> {
         // commande permet de constater plutôt que de supposer.
         Some("probe") => {
             raw.next();
-            let input = PathBuf::from(raw.next().context("usage : smartclip probe <clip.mp4>")?);
+            let input = PathBuf::from(raw.next().context("usage : aftermix probe <clip.mp4>")?);
             unsafe {
                 let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
                 MFStartup(MF_VERSION, MFSTARTUP_FULL)?;
             }
-            let result = smartclip_engine::export::probe_video(&input);
+            let result = aftermix_engine::export::probe_video(&input);
             unsafe {
                 let _ = MFShutdown();
                 CoUninitialize();
@@ -448,7 +448,7 @@ fn main() -> Result<()> {
             let dir = raw
                 .next()
                 .map(PathBuf::from)
-                .unwrap_or_else(|| dirs_videos().join("SmartClip"));
+                .unwrap_or_else(|| dirs_videos().join("Aftermix"));
             return run_list(&dir);
         }
         _ => {}

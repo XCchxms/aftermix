@@ -56,7 +56,7 @@ use windows::Win32::System::WinRT::Direct3D11::{
 use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
 use windows::core::{GUID, HSTRING, Interface};
 
-use smartclip_core::clock::{HNS_PER_SEC, MasterClock};
+use aftermix_core::clock::{HNS_PER_SEC, MasterClock};
 
 /// Nombre de textures dans l'anneau soumis à l'encodeur.
 ///

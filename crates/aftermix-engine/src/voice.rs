@@ -1,6 +1,6 @@
 //! Déclenchement à la voix.
 //!
-//! Une phrase d'activation — « ok smartclip », ou ce que l'utilisateur veut —
+//! Une phrase d'activation — « ok aftermix », ou ce que l'utilisateur veut —
 //! sauvegarde un clip sans lâcher la souris ni le clavier. C'est le complément
 //! naturel du raccourci : en pleine action, une main occupée est une main de
 //! moins pour appuyer sur trois touches.

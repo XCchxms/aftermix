@@ -188,7 +188,7 @@ export class Preview {
   /// place entre les deux : audible sans couvrir.
   ///
   /// Ce n'est qu'une proposition, jamais un réglage imposé : l'utilisateur
-  /// garde la main, et c'est bien pour ça qu'il utilise SmartClip.
+  /// garde la main, et c'est bien pour ça qu'il utilise Aftermix.
   suggestGains(labels) {
     const audible = [...this.tracks.entries()].filter(
       ([, track]) => track.peak >= SILENCE_PEAK && track.loudness > 0,

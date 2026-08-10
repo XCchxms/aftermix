@@ -1,4 +1,4 @@
-# Reprendre SmartClip Studio
+# Reprendre Aftermix
 
 **À lire en entier avant de toucher au code.** Ce document est autosuffisant :
 il contient l'état, les pièges, les outils de diagnostic et les décisions à ne
@@ -30,11 +30,11 @@ proposent de remixer un clip déjà enregistré.
 ## 2. Lancer et construire
 
 ```bash
-# Développement — l'exécutable est target\release\smartclip-studio.exe
-cargo run --release -p smartclip-app
+# Développement — l'exécutable est target\release\aftermix.exe
+cargo run --release -p aftermix-app
 
 # Installeur NSIS, dans target\release\bundle\nsis\
-cargo tauri build --config crates/smartclip-app/tauri.conf.json
+cargo tauri build --config crates/aftermix-app/tauri.conf.json
 ```
 
 > ⚠️ **`cargo build` ne met PAS à jour l'application installée.** Cette
@@ -52,9 +52,9 @@ quel depuis `ui/`.
 
 | Crate / dossier | Rôle |
 |---|---|
-| `smartclip-core` | Horloge QPC partagée |
-| `smartclip-engine` | Tout le multimédia : capture, audio, segments, export, bibliothèque |
-| `smartclip-app` | Interface Tauri — n'expose le moteur, ne contient aucune logique métier |
+| `aftermix-core` | Horloge QPC partagée |
+| `aftermix-engine` | Tout le multimédia : capture, audio, segments, export, bibliothèque |
+| `aftermix-app` | Interface Tauri — n'expose le moteur, ne contient aucune logique métier |
 | `ui/` | Vue : `index.html`, `styles.css`, `app.js`, `preview.js`, `overlay.html` |
 | `crates/spikes/` | Les quatre prototypes de la Phase 0, **inchangés depuis le début** |
 
@@ -124,21 +124,21 @@ que plusieurs hypothèses plausibles n'avaient pas résolu. Commencer par mesure
 ```bash
 # Régularité des horodatages vidéo. Une lecture saccadée s'y voit
 # immédiatement. Attendu : ~16,7 ms de moyenne, 0 % d'irréguliers.
-cargo run --release --bin smartclip -- probe "chemin\clip.mp4"
+cargo run --release --bin aftermix-cli -- probe "chemin\clip.mp4"
 
 # Extrait chaque piste en WAV. Vérifie qu'une piste contient du signal, et
 # permet de compter les discontinuités qui trahissent un grésillement.
-cargo run --release --bin smartclip -- tracks "chemin\clip.mp4"
+cargo run --release --bin aftermix-cli -- tracks "chemin\clip.mp4"
 
 # Micros que l'interface propose au choix. Distingue un pilote muet d'un
 # réglage mal appliqué, sans ouvrir l'application.
-cargo run --release --bin smartclip -- mics
+cargo run --release --bin aftermix-cli -- mics
 
 # Campagne d'endurance : mémoire, erreurs, redémarrages, sauvegardes.
-cargo run --release --bin smartclip -- --buffer 60 --duration 1800
+cargo run --release --bin aftermix-cli -- --buffer 60 --duration 1800
 ```
 
-**Troisième réflexe, le moins évident** : regarder `%TEMP%\smartclip`. Des
+**Troisième réflexe, le moins évident** : regarder `%TEMP%\aftermix`. Des
 fichiers qui s'y accumulent expliquent à eux seuls ce qui ressemble à une fuite
 mémoire — le cache d'écriture de Windows les impute au processus. Une campagne a
 ainsi montré 4,6 Go de « fuite » qui n'étaient que 935 Mo de segments orphelins.

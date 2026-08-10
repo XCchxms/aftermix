@@ -1,11 +1,11 @@
 [package]
-name = "smartclip-engine"
+name = "aftermix-engine"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-smartclip-core.workspace = true
+aftermix-core.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

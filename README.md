@@ -1,4 +1,4 @@
-# SmartClip Studio
+# Aftermix
 
 > **Pour reprendre le projet, lire [PASSATION.md](PASSATION.md) d'abord** — il
 > est autosuffisant. Ce README-ci est la référence technique détaillée : il
@@ -10,7 +10,7 @@ l'enregistrement**. Le jeu trop fort, le micro trop faible, Discord qui couvre
 les voix : on corrige après coup, en quelques secondes.
 
 > **État au 30/07/2026 — Phase 0 terminée, moteur V1 fonctionnel en CLI.**
-> Les quatre spikes sont validés et fusionnés dans `smartclip-engine`.
+> Les quatre spikes sont validés et fusionnés dans `aftermix-engine`.
 > Il manque l'interface, l'éditeur audio et l'export.
 > Il n'y a pas encore d'application : ni interface, ni projet Tauri. Le dépôt ne
 > contient que le cœur de l'horloge et deux prototypes headless.
@@ -21,18 +21,18 @@ les voix : on corrige après coup, en quelques secondes.
 
 ```
 Cargo.toml                                  workspace
-crates/smartclip-core/src/clock.rs          horloge maître QPC (+ tests)
-crates/smartclip-engine/src/lib.rs          configuration, timeline commune
-crates/smartclip-engine/src/video.rs        capture WGC + D3D11
-crates/smartclip-engine/src/audio.rs        découverte et capture par processus
-crates/smartclip-engine/src/segment.rs      segments MP4 + anneau borné
-crates/smartclip-engine/src/concat.rs       recollage sans réencodage
-crates/smartclip-engine/src/export.rs       mixage des pistes et export final
-crates/smartclip-engine/src/library.rs      bibliothèque et métadonnées (+ tests)
-crates/smartclip-app/src/main.rs            interface Tauri (commandes)
+crates/aftermix-core/src/clock.rs          horloge maître QPC (+ tests)
+crates/aftermix-engine/src/lib.rs          configuration, timeline commune
+crates/aftermix-engine/src/video.rs        capture WGC + D3D11
+crates/aftermix-engine/src/audio.rs        découverte et capture par processus
+crates/aftermix-engine/src/segment.rs      segments MP4 + anneau borné
+crates/aftermix-engine/src/concat.rs       recollage sans réencodage
+crates/aftermix-engine/src/export.rs       mixage des pistes et export final
+crates/aftermix-engine/src/library.rs      bibliothèque et métadonnées (+ tests)
+crates/aftermix-app/src/main.rs            interface Tauri (commandes)
 ui/                                         vue : HTML, CSS, JS sans bundler
-crates/smartclip-engine/src/recorder.rs     orchestration (API publique)
-crates/smartclip-engine/src/bin/smartclip.rs  CLI + raccourci global
+crates/aftermix-engine/src/recorder.rs     orchestration (API publique)
+crates/aftermix-engine/src/bin/aftermix-cli.rs  CLI + raccourci global
 crates/spikes/src/bin/spike1_capture.rs     Spike 1 — capture vidéo
 crates/spikes/src/bin/spike2_audio.rs       Spike 2 — audio par processus
 crates/spikes/src/bin/spike3_sync.rs        Spike 3 — muxage multi-pistes + synchro
@@ -87,7 +87,7 @@ prend d'avance. En capture continue, la même option provoquait une fuite de
 ## Lancer l'application
 
 ```bash
-cargo run --release -p smartclip-app
+cargo run --release -p aftermix-app
 ```
 
 Bibliothèque en grille, éditeur avec lecteur, un fader par piste, **écoute en
@@ -97,7 +97,7 @@ direct** et export.
 vit dans la barre système et le buffer continue de tourner pendant qu'on joue.
 On quitte par le menu de la barre système, jamais par la croix.
 
-Une **phrase d'activation vocale** — « ok smartclip », ou ce qu'on veut — fait
+Une **phrase d'activation vocale** — « ok aftermix », ou ce qu'on veut — fait
 la même chose sans lâcher la souris. Désactivée par défaut, réglable à côté du
 raccourci.
 
@@ -123,7 +123,7 @@ majoritaires, ne sont pas concernés.
 
 ### Les réglages
 
-Conservés dans `%APPDATA%\SmartClip\settings.json`, répartis en quatre onglets.
+Conservés dans `%APPDATA%\Aftermix\settings.json`, répartis en quatre onglets.
 Un fichier illisible ne bloque pas le démarrage : chaque champ manquant reprend
 sa valeur par défaut plutôt que de refuser d'ouvrir l'application.
 
@@ -137,7 +137,7 @@ sa valeur par défaut plutôt que de refuser d'ouvrir l'application.
 | Déclencheurs | Raccourci | `hotkey` | `Ctrl+Shift+X` |
 | Déclencheurs | Phrase vocale | `voice_phrase` | vide = écoute coupée |
 | Déclencheurs | Pastille en jeu | `overlay` | vrai |
-| Général | Dossier des clips | `output_dir` | `%USERPROFILE%\Videos\SmartClip` |
+| Général | Dossier des clips | `output_dir` | `%USERPROFILE%\Videos\Aftermix` |
 | Général | Buffer à l'ouverture | `auto_start` | vrai |
 | Général | Lancement Windows | `launch_at_login` | faux |
 
@@ -163,7 +163,7 @@ prendrait effet qu'à la session suivante.
 
 ```bash
 # Ce que l'interface propose au choix, sans avoir à l'ouvrir.
-cargo run --release --bin smartclip -- mics
+cargo run --release --bin aftermix-cli -- mics
 ```
 
 L'écoute en direct est le cœur de l'expérience : bouger un fader pendant la
@@ -181,10 +181,10 @@ régler les faders, exporter — demande une vérification à la main.
 ## Produire l'installeur
 
 ```bash
-cargo tauri build --config crates/smartclip-app/tauri.conf.json
+cargo tauri build --config crates/aftermix-app/tauri.conf.json
 ```
 
-Produit `SmartClip Studio_0.1.0_x64-setup.exe` (**2,3 Mo**) dans
+Produit `Aftermix_0.1.0_x64-setup.exe` (**2,47 Mo**) dans
 `target/release/bundle/nsis/`. Installation par utilisateur, sans droits
 administrateur. Le binaire lui-même fait 10,2 Mo — l'interface s'appuie sur le
 WebView2 du système, présent d'origine sur Windows 11.
@@ -197,7 +197,7 @@ valait le choix de Rust + Tauri pour un logiciel censé tourner en permanence.
 L'installeur fonctionne tel quel, mais **Windows affichera un avertissement**
 tant que le binaire n'est pas signé. À transmettre aux testeurs :
 
-1. Lancer `SmartClip Studio_0.1.0_x64-setup.exe`
+1. Lancer `Aftermix_0.1.0_x64-setup.exe`
 2. Sur l'écran bleu « Windows a protégé votre ordinateur » →
    **Informations complémentaires** → **Exécuter quand même**
 3. L'installation ne demande aucun droit administrateur
@@ -215,18 +215,18 @@ en bêta fermée.
 ## Lancer le moteur en ligne de commande
 
 ```bash
-cargo run --release --bin smartclip -- --buffer 60
+cargo run --release --bin aftermix-cli -- --buffer 60
 ```
 
 Campagne d'endurance — laisse tourner, relève mémoire, erreurs et
 redémarrages, et sauvegarde toutes les 2 minutes :
 
 ```bash
-cargo run --release --bin smartclip -- --buffer 60 --duration 1800
+cargo run --release --bin aftermix-cli -- --buffer 60 --duration 1800
 ```
 
 Le buffer tourne en continu ; **Ctrl+Shift+X** fige les dernières secondes dans
-`%USERPROFILE%\Videos\SmartClip`, **Ctrl+C** quitte. `--auto-save <s>` sauvegarde
+`%USERPROFILE%\Videos\Aftermix`, **Ctrl+C** quitte. `--auto-save <s>` sauvegarde
 une fois puis rend la main, sans dépendre d'une frappe.
 
 Mesuré sur AMD Radeon RX 6650 XT, 1080p60, buffer de 15 s :
@@ -243,7 +243,7 @@ promesse centrale du produit, et elle tient.
 ## Rééquilibrer un clip
 
 ```bash
-cargo run --release --bin smartclip -- mix clip.mp4 --gains "1.0,0.4,1.0"
+cargo run --release --bin aftermix-cli -- mix clip.mp4 --gains "1.0,0.4,1.0"
 ```
 
 Un gain par piste, dans l'ordre du fichier ; `0` coupe. Sans `--gains`, toutes
@@ -256,7 +256,7 @@ total, vidéo recopiée sans réencodage.
 Pour lister la bibliothèque :
 
 ```bash
-cargo run --release --bin smartclip -- list
+cargo run --release --bin aftermix-cli -- list
 ```
 
 Si le cumul des gains dépasse la pleine échelle, un limiteur s'applique et la
@@ -268,7 +268,7 @@ livrer une distorsion découverte à la lecture.
 ## Lancer les prototypes
 
 ```bash
-cargo test -p smartclip-core
+cargo test -p aftermix-core
 ```
 
 ```bash
@@ -412,7 +412,7 @@ séparaient du moteur, toutes deux introduites après coup :
    temps qui passe dès qu'une image manquait.
 2. La régulation adaptative sautait des images sur écriture lente.
 
-→ La commande `smartclip probe <clip.mp4>` mesure la régularité des
+→ La commande `aftermix probe <clip.mp4>` mesure la régularité des
 horodatages. C'est elle qui a permis de trancher : **mesurer plutôt que
 raisonner sur du code qu'on vient d'écrire**.
 
@@ -468,7 +468,7 @@ chevauchement d'échantillons.
 
 **Le moteur se détectait lui-même comme source à enregistrer.** Ouvrir un client
 de capture crée une session sur le périphérique de sortie, que le balayage
-suivant voyait comme une application à capturer : SmartClip s'attribuait une
+suivant voyait comme une application à capturer : Aftermix s'attribuait une
 piste à son propre nom. D'où l'exclusion du PID courant dans `discover`.
 
 **Le silence doit s'écrire par blocs de 100 ms, pas à la cadence vidéo.** Écrit à

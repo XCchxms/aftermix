@@ -9,7 +9,7 @@ publish.workspace = true
 # n'est pas destiné à être repris tel quel dans le moteur.
 
 [dependencies]
-smartclip-core.workspace = true
+aftermix-core.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
