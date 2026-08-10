@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Aftermix — icône d'application.
+
+       Trois faders dont les curseurs montent de gauche à droite. Le motif dit
+       la seule chose que fait le produit : un mixage qu'on règle. La diagonale
+       le distingue d'un égaliseur, dont les barres partent toujours d'une base
+       commune.
+
+       Fond blanc et marques quasi noires : c'est le contraste maximum, celui
+       qui survit le mieux à la réduction en 32 px de la barre des tâches. Un
+       fond sombre disparaîtrait dans une barre des tâches sombre, cas
+       majoritaire.
+
+       Le motif occupe les deux tiers de la surface. Une première version plus
+       aérée perdait ses rails dès 32 px : à cette taille chaque pixel gagné sur
+       la marge est un pixel donné à la forme. -->
+
+  <rect width="1024" height="1024" rx="228" fill="#f7f8fa"/>
+
+  <!-- Rails. -->
+  <g fill="#b4bac4">
+    <rect x="253" y="180" width="38" height="664" rx="19"/>
+    <rect x="493" y="180" width="38" height="664" rx="19"/>
+    <rect x="733" y="180" width="38" height="664" rx="19"/>
+  </g>
+
+  <!-- Curseurs, en marche montante. -->
+  <g fill="#141518">
+    <rect x="188" y="647" width="168" height="106" rx="40"/>
+    <rect x="428" y="459" width="168" height="106" rx="40"/>
+    <rect x="668" y="271" width="168" height="106" rx="40"/>
+  </g>
+</svg>

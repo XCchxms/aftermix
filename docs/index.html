@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aftermix — répare le son de tes clips après coup</title>
+<meta name="description" content="Buffer de jeu qui enregistre chaque application dans une piste audio séparée. Le jeu couvrait ta voix ? Baisse-le. Après." />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<meta property="og:title" content="Aftermix" />
+<meta property="og:description" content="Le clip est bon. Le son est raté. Répare-le après coup." />
+<meta property="og:type" content="website" />
+<style>
+:root {
+  --bg: #0c0d0f;
+  --surface: #161719;
+  --surface-2: #1c1e21;
+  --border: #26282c;
+  --border-strong: #34373c;
+  --text: #f2f3f5;
+  --text-dim: #8b8f96;
+  --accent: #5b7cfa;
+  --live: #3ecf8e;
+  --warn: #f5b544;
+  --danger: #f0616d;
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --shell: 1120px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.65 "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { letter-spacing: -0.35px; font-weight: 650; margin: 0; line-height: 1.2; }
+p { margin: 0; }
+a { color: inherit; }
+
+.shell {
+  width: 100%;
+  max-width: var(--shell);
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
+/* ───────────────────────────── en-tête ───────────────────────────── */
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(12, 13, 15, 0.86);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 62px;
+}
+.brand { display: flex; align-items: center; gap: 11px; font-size: 16px; font-weight: 650; }
+.brand svg { width: 26px; height: 12px; flex: none; }
+.brand .rails { fill: #4a4e56; }
+.brand .caps { fill: var(--text); }
+.header-inner .spacer { flex: 1; }
+.header-link {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 14px;
+  transition: color 0.18s var(--ease);
+}
+.header-link:hover { color: var(--text); }
+
+/* ───────────────────────────── boutons ───────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 13px 22px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 550;
+  text-decoration: none;
+  transition: background 0.18s var(--ease), transform 0.12s var(--ease),
+              border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
+}
+.btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.btn:active { transform: scale(0.975); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* L'action principale est blanche : sur fond sombre rien ne ressort davantage,
+   et cela évite le bouton coloré saturé qui date une interface. */
+.btn.primary {
+  background: #f2f3f5;
+  color: #0c0d0f;
+  border-color: transparent;
+  font-weight: 620;
+  padding: 15px 26px;
+  font-size: 16px;
+}
+.btn.primary:hover { background: #fff; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5); }
+.btn.small { padding: 9px 15px; font-size: 14px; }
+
+/* ────────────────────────────── hero ─────────────────────────────── */
+
+.hero { padding: 96px 0 80px; }
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-bottom: 26px;
+}
+.eyebrow b { color: var(--text); font-weight: 600; }
+.hero h1 {
+  font-size: clamp(38px, 6.2vw, 62px);
+  max-width: 15ch;
+  letter-spacing: -1.6px;
+  font-weight: 680;
+}
+.hero .lede {
+  margin-top: 22px;
+  max-width: 56ch;
+  font-size: clamp(16px, 2vw, 19px);
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.hero .lede b { color: var(--text); font-weight: 600; }
+.cta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 38px; }
+.cta-note { font-size: 13px; color: var(--text-dim); }
+.cta-note b { color: var(--text); font-weight: 600; }
+
+/* ───────────────────────── schéma du mixeur ──────────────────────── */
+
+.stage {
+  margin-top: 62px;
+  padding: 26px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+}
+.stage svg { width: 100%; height: auto; display: block; }
+.stage figcaption {
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* ───────────────────────────── sections ──────────────────────────── */
+
+section { padding: 86px 0; border-top: 1px solid var(--border); }
+.section-head { max-width: 62ch; margin-bottom: 44px; }
+.section-head h2 { font-size: clamp(26px, 3.6vw, 34px); letter-spacing: -0.9px; }
+.section-head p { margin-top: 14px; color: var(--text-dim); font-size: 17px; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.panel {
+  padding: 26px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.panel h3 { font-size: 17px; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+.panel ul { margin: 0; padding-left: 20px; color: var(--text-dim); }
+.panel li { margin-bottom: 9px; }
+.panel li:last-child { margin-bottom: 0; }
+.tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.2px;
+}
+.tag.before { background: rgba(240, 97, 109, 0.14); color: var(--danger); }
+.tag.after { background: rgba(62, 207, 142, 0.14); color: var(--live); }
+
+/* étapes */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; counter-reset: step; }
+.step {
+  padding: 26px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.step-num {
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  font-size: 13px;
+  font-weight: 650;
+  margin-bottom: 16px;
+}
+.step h3 { font-size: 16px; margin-bottom: 9px; }
+.step p { color: var(--text-dim); font-size: 14.5px; }
+kbd {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* atouts */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.card {
+  padding: 26px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease);
+}
+.card:hover { border-color: var(--border-strong); transform: translateY(-3px); }
+.card h3 { font-size: 16px; margin-bottom: 10px; }
+.card p { color: var(--text-dim); font-size: 14.5px; }
+
+/* installation */
+.install { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+.install ol { margin: 0; padding-left: 22px; }
+.install li { margin-bottom: 16px; color: var(--text-dim); }
+.install li b { color: var(--text); font-weight: 600; }
+.notice {
+  padding: 20px 22px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(245, 181, 68, 0.28);
+  background: rgba(245, 181, 68, 0.06);
+}
+.notice h3 { font-size: 15px; color: var(--warn); margin-bottom: 11px; }
+.notice p { font-size: 14px; color: var(--text-dim); margin-bottom: 12px; }
+.notice p:last-child { margin-bottom: 0; }
+
+/* mesures */
+.specs {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+.specs-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 460px; }
+th, td { text-align: left; padding: 15px 22px; border-bottom: 1px solid var(--border); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-dim); font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+td:last-child { font-variant-numeric: tabular-nums; color: var(--text-dim); }
+td:first-child { font-weight: 550; }
+
+/* FAQ */
+details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+summary {
+  padding: 19px 22px;
+  cursor: pointer;
+  font-weight: 550;
+  font-size: 15.5px;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  transition: background 0.18s var(--ease);
+}
+summary::-webkit-details-marker { display: none; }
+summary:hover { background: var(--surface-2); }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+summary::after {
+  content: "";
+  width: 8px; height: 8px; flex: none;
+  border-right: 1.8px solid var(--text-dim);
+  border-bottom: 1.8px solid var(--text-dim);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform 0.22s var(--ease);
+}
+details[open] summary::after { transform: rotate(225deg) translate(-2px, -2px); }
+details p { padding: 0 22px 20px; color: var(--text-dim); font-size: 14.5px; }
+details p + p { padding-top: 0; margin-top: -8px; }
+
+/* fin */
+.closing { text-align: center; }
+.closing h2 { font-size: clamp(26px, 3.6vw, 34px); letter-spacing: -0.9px; }
+.closing p { margin: 16px auto 32px; max-width: 50ch; color: var(--text-dim); }
+
+footer {
+  border-top: 1px solid var(--border);
+  padding: 34px 0 46px;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+.footer-inner { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.footer-inner .spacer { flex: 1; }
+footer a { color: var(--text-dim); text-decoration: none; transition: color 0.18s var(--ease); }
+footer a:hover { color: var(--text); }
+
+/* entrées : discrètes, et supprimées si le système le demande */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+.hero > * { animation: rise-in 0.6s var(--ease-out) backwards; }
+.hero .lede { animation-delay: 0.06s; }
+.hero .cta { animation-delay: 0.12s; }
+.hero .stage { animation-delay: 0.18s; }
+
+@media (max-width: 860px) {
+  .split, .install, .steps { grid-template-columns: 1fr; }
+  .hero { padding: 62px 0 56px; }
+  section { padding: 62px 0; }
+  .btn.primary { width: 100%; }
+  .cta { gap: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="shell header-inner">
+    <span class="brand">
+      <svg viewBox="0 0 44 20" aria-hidden="true">
+        <g class="rails">
+          <rect x="5" y="2" width="2.4" height="16" rx="1.2"/>
+          <rect x="20.8" y="2" width="2.4" height="16" rx="1.2"/>
+          <rect x="36.6" y="2" width="2.4" height="16" rx="1.2"/>
+        </g>
+        <g class="caps">
+          <rect x="1" y="12.2" width="10.4" height="5.2" rx="2.6"/>
+          <rect x="16.8" y="7.4" width="10.4" height="5.2" rx="2.6"/>
+          <rect x="32.6" y="2.6" width="10.4" height="5.2" rx="2.6"/>
+        </g>
+      </svg>
+      Aftermix
+    </span>
+    <div class="spacer"></div>
+    <a class="header-link" href="#installation">Installation</a>
+    <a class="header-link" href="#faq">Questions</a>
+    <a class="btn small" href="https://github.com/XCchxms/aftermix">Code source</a>
+  </div>
+</header>
+
+<main>
+
+<div class="shell hero">
+  <span class="eyebrow"><b>Windows 11</b> · gratuit · 2,5 Mo</span>
+  <h1>Le clip est bon. Le son est raté.</h1>
+  <p class="lede">
+    Aftermix garde les dernières minutes de jeu en mémoire et enregistre
+    <b>chaque application dans sa propre piste audio</b>. Le jeu couvrait ta
+    voix ? Tu baisses le jeu. Après coup, en quelques secondes, sans avoir à
+    refaire la partie.
+  </p>
+
+  <div class="cta">
+    <!-- TODO : remplacer par l'URL de la release une fois publiée -->
+    <a class="btn primary" href="#installation" id="download">Télécharger pour Windows</a>
+    <span class="cta-note">
+      Version 0.1.0 · <b>installeur non signé</b>, voir l'installation
+    </span>
+  </div>
+
+  <figure class="stage">
+    <svg viewBox="0 0 900 320" role="img"
+         aria-label="Schéma : un clip enregistré, décomposé en quatre pistes audio réglables — Jeu, Discord, Musique et Micro — chacune avec son propre curseur.">
+      <defs>
+        <clipPath id="screen"><rect x="34" y="52" width="286" height="161" rx="9"/></clipPath>
+      </defs>
+
+      <!-- le clip -->
+      <text x="34" y="34" fill="#8b8f96" font-family="inherit" font-size="12.5" font-weight="600" letter-spacing="0.7">LE CLIP</text>
+      <rect x="34" y="52" width="286" height="161" rx="10" fill="#0c0d0f" stroke="#26282c"/>
+      <g clip-path="url(#screen)" opacity="0.5">
+        <rect x="34" y="52" width="286" height="161" fill="#141821"/>
+        <circle cx="120" cy="118" r="34" fill="#1e2430"/>
+        <rect x="188" y="96" width="104" height="9" rx="4.5" fill="#1e2430"/>
+        <rect x="188" y="115" width="72" height="9" rx="4.5" fill="#1e2430"/>
+        <rect x="54" y="176" width="246" height="16" rx="8" fill="#1a1f28"/>
+      </g>
+      <circle cx="52" cy="70" r="4.5" fill="#3ecf8e"/>
+      <text x="64" y="74" fill="#8b8f96" font-family="inherit" font-size="11">01:02</text>
+
+      <!-- flèche -->
+      <g stroke="#34373c" stroke-width="1.6" fill="none">
+        <path d="M336 132 h44"/>
+        <path d="m372 125 8 7-8 7"/>
+      </g>
+
+      <!-- les pistes -->
+      <text x="400" y="34" fill="#8b8f96" font-family="inherit" font-size="12.5" font-weight="600" letter-spacing="0.7">QUATRE PISTES, RÉGLABLES APRÈS COUP</text>
+
+      <!-- Jeu : trop fort, on le baisse -->
+      <g>
+        <text x="400" y="72" fill="#f2f3f5" font-family="inherit" font-size="13" font-weight="550">Jeu</text>
+        <rect x="400" y="82" width="440" height="5" rx="2.5" fill="#26282c"/>
+        <rect x="400" y="82" width="176" height="5" rx="2.5" fill="#5b7cfa"/>
+        <circle cx="576" cy="84.5" r="8" fill="#fff"/>
+        <text x="856" y="89" fill="#8b8f96" font-family="inherit" font-size="12" text-anchor="end">40 %</text>
+      </g>
+
+      <!-- Discord -->
+      <g>
+        <text x="400" y="128" fill="#f2f3f5" font-family="inherit" font-size="13" font-weight="550">Discord</text>
+        <rect x="400" y="138" width="440" height="5" rx="2.5" fill="#26282c"/>
+        <rect x="400" y="138" width="352" height="5" rx="2.5" fill="#5b7cfa"/>
+        <circle cx="752" cy="140.5" r="8" fill="#fff"/>
+        <text x="856" y="145" fill="#8b8f96" font-family="inherit" font-size="12" text-anchor="end">80 %</text>
+      </g>
+
+      <!-- Musique : coupée -->
+      <g opacity="0.45">
+        <text x="400" y="184" fill="#f2f3f5" font-family="inherit" font-size="13" font-weight="550">Musique</text>
+        <rect x="400" y="194" width="440" height="5" rx="2.5" fill="#26282c"/>
+        <circle cx="400" cy="196.5" r="8" fill="#fff"/>
+        <text x="856" y="201" fill="#8b8f96" font-family="inherit" font-size="12" text-anchor="end">coupée</text>
+      </g>
+
+      <!-- Micro : remonté au-delà de 100 % -->
+      <g>
+        <text x="400" y="240" fill="#f2f3f5" font-family="inherit" font-size="13" font-weight="550">Micro</text>
+        <rect x="400" y="250" width="440" height="5" rx="2.5" fill="#26282c"/>
+        <rect x="400" y="250" width="418" height="5" rx="2.5" fill="#5b7cfa"/>
+        <circle cx="818" cy="252.5" r="8" fill="#fff"/>
+        <text x="856" y="257" fill="#8b8f96" font-family="inherit" font-size="12" text-anchor="end">190 %</text>
+      </g>
+
+      <text x="400" y="296" fill="#8b8f96" font-family="inherit" font-size="12.5">
+        Tu entends le résultat pendant que tu règles. Puis tu exportes.
+      </text>
+    </svg>
+    <figcaption>L'éditeur : une piste par application, un curseur chacune, écoute immédiate.</figcaption>
+  </figure>
+</div>
+
+<section id="pourquoi">
+  <div class="shell">
+    <div class="section-head">
+      <h2>Un seul mixage, figé pour toujours</h2>
+      <p>
+        C'est ce que produisent ShadowPlay, Medal et OBS : toutes les sources
+        fondues dans une seule piste au moment de l'enregistrement. Une fois le
+        clip écrit, l'équilibre est définitif.
+      </p>
+    </div>
+    <div class="split">
+      <div class="panel">
+        <h3><span class="tag before">Sans Aftermix</span></h3>
+        <ul>
+          <li>Une seule piste audio, tout est déjà mélangé</li>
+          <li>Le jeu couvre ta voix : le clip est perdu</li>
+          <li>Un ami a saturé son micro : perdu aussi</li>
+          <li>La musique tourne dans le fond : impossible à retirer</li>
+          <li>Il reste à refaire la partie, et espérer</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3><span class="tag after">Avec Aftermix</span></h3>
+        <ul>
+          <li>Une piste par application, gardées séparées</li>
+          <li>Tu baisses le jeu et tu remontes ta voix</li>
+          <li>Tu coupes celui qui sature, tu gardes le reste</li>
+          <li>La musique s'enlève d'un curseur</li>
+          <li>Le clip est réparé en quelques secondes</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="comment">
+  <div class="shell">
+    <div class="section-head">
+      <h2>Trois gestes</h2>
+      <p>Rien à configurer, rien à déclarer. Les applications qui jouent du son sont trouvées toutes seules.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Tu joues</h3>
+        <p>
+          Le buffer tourne en fond et garde les 30 dernières secondes, ou
+          jusqu'à 5 minutes. Rien n'est écrit sur le disque tant que tu ne
+          demandes rien.
+        </p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Il se passe quelque chose</h3>
+        <p>
+          <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>X</kbd> — ou une phrase que tu
+          choisis, dite à voix haute. Le clip est déjà enregistré, il est juste
+          sauvegardé.
+        </p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Tu répares le son</h3>
+        <p>
+          Un curseur par application. Tu entends le résultat pendant que tu
+          règles, sans rien exporter. Quand c'est bon, tu exportes.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="atouts">
+  <div class="shell">
+    <div class="section-head">
+      <h2>Ce qui compte sous le capot</h2>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <h3>Rien n'est injecté dans le jeu</h3>
+        <p>
+          La capture passe par Windows Graphics Capture, l'interface officielle
+          du système. Aucune bibliothèque n'est injectée dans le processus du
+          jeu — c'est un choix de conception, pas un détail.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Aucune source à déclarer</h3>
+        <p>
+          Jeu, Discord, navigateur, musique : chaque application qui produit du
+          son prend sa piste automatiquement, et les nouvelles sont détectées
+          en cours de partie.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Léger, en permanence</h3>
+        <p>
+          Environ 6 % d'un cœur et 180 Mo de mémoire pendant que ça tourne.
+          L'installeur pèse 2,5 Mo : l'interface s'appuie sur le WebView2 déjà
+          présent dans Windows.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Déclenchement à la voix</h3>
+        <p>
+          La reconnaissance hors ligne de Windows écoute une phrase que tu
+          définis. Rien ne sort de la machine, et c'est désactivé par défaut.
+        </p>
+      </div>
+      <div class="card">
+        <h3>La vidéo n'est jamais réencodée</h3>
+        <p>
+          À l'export, seul l'audio est remixé. L'image est recopiée telle
+          quelle : pas de perte de qualité, et un export en quelques secondes.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Fenêtre fermée, ça continue</h3>
+        <p>
+          L'application vit dans la barre système. Le raccourci fonctionne
+          pendant une partie en plein écran fenêtré, sans jamais te voler le
+          clavier.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="installation">
+  <div class="shell">
+    <div class="section-head">
+      <h2>Installation</h2>
+      <p>Par utilisateur, sans droits administrateur. Une étape mérite une explication.</p>
+    </div>
+    <div class="install">
+      <div>
+        <ol>
+          <li>
+            <b>Télécharge l'installeur</b> et lance-le.
+          </li>
+          <li>
+            <b>Windows affichera un écran bleu</b> « Windows a protégé votre
+            ordinateur ». Clique sur <b>Informations complémentaires</b>, puis
+            <b>Exécuter quand même</b>.
+          </li>
+          <li>
+            <b>C'est fini.</b> Aftermix démarre dans la barre système et le
+            buffer se lance tout seul.
+          </li>
+        </ol>
+        <a class="btn primary" href="#download" style="margin-top:10px">Télécharger pour Windows</a>
+      </div>
+
+      <aside class="notice">
+        <h3>Pourquoi cet avertissement</h3>
+        <p>
+          L'installeur n'est pas signé numériquement. Un certificat de signature
+          de code coûte quelques centaines d'euros par an, et Windows affiche
+          cet écran pour tout programme qui n'en a pas — quel que soit son
+          contenu.
+        </p>
+        <p>
+          Un antivirus peut aussi réagir : une application qui capture l'écran
+          et l'audio de plusieurs processus présente exactement le profil qu'ils
+          surveillent.
+        </p>
+        <p>
+          Si ça te gêne, et c'est légitime, le code source est public et
+          l'application se construit chez toi en une commande.
+        </p>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<section id="mesures">
+  <div class="shell">
+    <div class="section-head">
+      <h2>Mesures</h2>
+      <p>
+        Relevées sur une seule machine, une Radeon RX 6650 XT en 1080p 60 fps.
+        Ce ne sont pas des garanties : ton matériel donnera d'autres chiffres.
+      </p>
+    </div>
+    <div class="specs">
+      <div class="specs-scroll">
+        <table>
+          <thead>
+            <tr><th scope="col">Poste</th><th scope="col">Mesure</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Processeur, en continu</td><td>~6 % d'un cœur</td></tr>
+            <tr><td>Mémoire</td><td>~180 Mo, stable</td></tr>
+            <tr><td>Disque, qualité haute</td><td>5,3 Mo/s — 1,6 Go pour 5 min</td></tr>
+            <tr><td>Sauvegarde d'un clip d'une minute</td><td>~1,1 s</td></tr>
+            <tr><td>Export d'un clip de 54 s à 6 pistes</td><td>1,8 s</td></tr>
+            <tr><td>Durées de buffer</td><td>30 s · 1 min · 3 min · 5 min</td></tr>
+            <tr><td>Pistes audio simultanées</td><td>jusqu'à 6</td></tr>
+            <tr><td>Taille de l'installeur</td><td>2,5 Mo</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p style="margin-top:18px; font-size:13.5px; color:var(--text-dim)">
+      L'impact sur les images par seconde en jeu n'a pas encore été mesuré.
+    </p>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="shell">
+    <div class="section-head"><h2>Questions</h2></div>
+
+    <details>
+      <summary>Est-ce que ça marche sur Windows 10 ?</summary>
+      <p>
+        Non, Windows 11 uniquement. Aftermix s'appuie sur la capture audio par
+        processus, qui n'existe pas sur Windows 10 — et c'est précisément ce qui
+        permet de séparer les pistes. Sans elle, il n'y aurait plus de produit.
+      </p>
+    </details>
+
+    <details>
+      <summary>Est-ce que je risque un bannissement anti-cheat ?</summary>
+      <p>
+        Aftermix n'injecte rien dans le jeu et ne lit pas sa mémoire. La capture
+        passe par Windows Graphics Capture, l'interface fournie par le système
+        et utilisée par le partage d'écran de Teams ou de Discord.
+      </p>
+      <p>
+        Cela dit, aucun éditeur ne délivre de garantie sur ce sujet, et je ne
+        peux pas t'en donner une non plus. Le code est public si tu veux
+        vérifier ce qu'il fait.
+      </p>
+    </details>
+
+    <details>
+      <summary>Combien de place ça prend sur mon disque ?</summary>
+      <p>
+        Le buffer occupe en continu ce que tu lui alloues : environ 1,6 Go pour
+        5 minutes en qualité haute, nettement moins en qualité légère. Cet
+        espace est réutilisé en boucle, il ne grossit pas. Seuls les clips que
+        tu sauvegardes sont conservés.
+      </p>
+    </details>
+
+    <details>
+      <summary>La pastille de confirmation ne s'affiche pas pendant mon jeu.</summary>
+      <p>
+        En plein écran <b>exclusif</b>, aucune fenêtre ne peut se superposer au
+        jeu : c'est une limite de Windows. Y parvenir demanderait d'injecter un
+        élément dans le moteur de rendu du jeu, ce qu'Aftermix s'interdit.
+      </p>
+      <p>
+        Le clip est bien enregistré malgré tout, et la notification reste dans
+        le centre de notifications. En plein écran fenêtré, largement
+        majoritaire aujourd'hui, la pastille s'affiche normalement.
+      </p>
+    </details>
+
+    <details>
+      <summary>Est-ce que mes clips ou ma voix partent quelque part ?</summary>
+      <p>
+        Non. Tout reste sur ta machine : les clips dans ton dossier Vidéos, la
+        reconnaissance vocale en local. Aftermix ne contient ni compte, ni
+        télémétrie, ni connexion réseau.
+      </p>
+    </details>
+
+    <details>
+      <summary>Combien ça coûte ?</summary>
+      <p>
+        Rien. C'est un projet personnel, dont le code source est public. Il n'y
+        a ni version payante, ni compte à créer.
+      </p>
+    </details>
+  </div>
+</section>
+
+<section class="closing">
+  <div class="shell">
+    <h2>Le prochain bon moment mérite un bon son</h2>
+    <p>Installe-le maintenant, et il sera prêt la prochaine fois qu'il se passe quelque chose.</p>
+    <a class="btn primary" href="#download">Télécharger pour Windows</a>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="shell footer-inner">
+    <span>Aftermix 0.1.0 — Windows 11</span>
+    <div class="spacer"></div>
+    <a href="https://github.com/XCchxms/aftermix">Code source</a>
+    <a href="https://github.com/XCchxms/aftermix/releases">Versions</a>
+    <a href="https://github.com/XCchxms/aftermix/issues">Signaler un problème</a>
+  </div>
+</footer>
+
+</body>
+</html>
