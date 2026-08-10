@@ -161,13 +161,43 @@ Trois débordements corrigés, tous dus à du contenu de longueur imprévisible 
 
 ## Adaptation aux tailles
 
-Trois paliers, pas plus :
-
 | | |
 |---|---|
+| **≥ 1900 px** | plafonds relevés à 1840 px, cartes de 320 px — sinon un 2560 laissait plus de 1000 px de vide |
 | **≥ 1600 px** | la grille respire au lieu de s'étirer |
 | **≤ 1080 px** | le mixage passe sous le lecteur — une colonne de 360 px sur 900 px de large ne laisse plus rien à la vidéo |
 | **≤ 760 px** | l'en-tête se réorganise, la recherche prend toute la largeur, les onglets se resserrent |
+| **hauteur ≤ 780 px** | la réserve verticale du lecteur se resserre, sinon il ne reste rien pour l'image |
+
+Trois règles, chacune tirée d'un défaut constaté en plein écran :
+
+**Le bloc de media queries reste en fin de fichier.** Une media query n'ajoute
+aucune spécificité : à sélecteur égal, c'est la règle la plus tardive qui gagne.
+Placé en tête, comme il l'a longtemps été, chaque palier était écrasé par la
+définition du composant qui suivait — l'application ne s'adaptait donc à
+*aucune* taille, en silence.
+
+**Tout conteneur borné est centré** (`margin-inline: auto`). Une largeur
+maximale sans centrage accumule tout le vide du même côté : plus de 1000 px à
+droite sur un écran 2560, et une fenêtre qui paraît à moitié remplie.
+
+**La vue de l'éditeur occupe toute la hauteur** et le lecteur est borné dans les
+deux sens. Sans la première, le bas de la fenêtre restait vide en plein écran ;
+sans la seconde, une vidéo dimensionnée par sa seule largeur poussait la forme
+d'onde sous la ligne de flottaison. Le lecteur utilise `max-width` et non
+`width` : avec une largeur imposée, le cadre reste plus large que l'image dès
+que la hauteur devient la contrainte, et le rayon comme l'ombre encadrent des
+bandes noires au lieu du clip.
+
+Mesuré après correction, avec un clip 1920×1080 :
+
+| Fenêtre | Grille | Vide G/D | Lecteur | Onde visible |
+|---|---|---|---|---|
+| 2560×1440 | 1840 px, 5 colonnes | 304 / 304 | 1372×773 | oui |
+| 1600×700 | — | — | 840×474 | oui |
+| 1280×800 | 1228 px, 4 colonnes | 0 / 0 | 842×475 | oui |
+
+Aucun défilement, horizontal ou vertical, dans aucun des trois cas.
 
 ## Ce qui reste à faire
 

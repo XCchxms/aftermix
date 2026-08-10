@@ -227,40 +227,6 @@ input:focus-visible {
 
 main { flex: 1; overflow-y: auto; padding: 28px 26px 32px; }
 
-/* ── Adaptation aux tailles d'écran ──
-   L'application sert autant en fenêtre étroite à côté d'un jeu qu'en plein
-   écran sur un moniteur large. Trois paliers suffisent. */
-
-/* Écran large : la grille respire au lieu de s'étirer, l'éditeur gagne en
-   confort de lecture. */
-@media (min-width: 1600px) {
-  main { padding: 34px 40px 40px; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 22px; }
-  .editor { grid-template-columns: minmax(0, 1fr) 400px; gap: 32px; }
-}
-
-/* Fenêtre étroite : le panneau de mixage passe sous le lecteur plutôt que de
-   l'écraser. Une colonne de 360 px sur 900 px de large ne laisse plus rien à
-   la vidéo. */
-@media (max-width: 1080px) {
-  .editor { grid-template-columns: 1fr; gap: 18px; height: auto; }
-  .panel { max-height: none; }
-  main { padding: 20px 18px 26px; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
-}
-
-/* Très étroit : l'en-tête se réorganise pour que les actions restent
-   atteignables sans défilement horizontal. */
-@media (max-width: 760px) {
-  header { flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
-  .status { order: 3; width: 100%; }
-  .brand { font-size: 14px; }
-  /* La recherche prend toute la largeur plutôt que d'écraser le tri. */
-  .search { order: 3; width: 100%; }
-  .search input, .search input:focus { width: 100%; }
-  .tabs button { font-size: 11.5px; padding: 8px 2px; }
-}
-
 /* Chaque vue entre par un léger glissement : le passage bibliothèque ↔ éditeur
    se lit comme un déplacement, pas comme un remplacement brutal. */
 @keyframes view-in {
@@ -295,7 +261,7 @@ main > section:not(.hidden) { animation: view-in 0.34s var(--ease-out); }
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 20px;
+  margin: 0 auto 20px;
   max-width: 1400px;
   flex-wrap: wrap;
 }
@@ -370,8 +336,12 @@ main > section:not(.hidden) { animation: view-in 0.34s var(--ease-out); }
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 18px;
   /* Une largeur maximale évite que la grille s'étire indéfiniment sur un écran
-     large : au-delà, l'œil perd la relation entre les cartes. */
+     large : au-delà, l'œil perd la relation entre les cartes.
+     **Centrée, impérativement.** Bornée sans être centrée, elle laissait tout
+     le vide du même côté — plus de 1000 px sur un écran 2560, et une fenêtre
+     plein écran qui semblait à moitié remplie. */
   max-width: 1400px;
+  margin-inline: auto;
 }
 
 .card {
@@ -525,16 +495,46 @@ main > section:not(.hidden) { animation: view-in 0.34s var(--ease-out); }
 
 /* ─────────────────────────────── éditeur ──────────────────────────────── */
 
+/* La vue occupe toute la hauteur disponible.
+   Sans cela l'éditeur s'arrêtait à la hauteur de son contenu et laissait le bas
+   de la fenêtre vide en plein écran — 450 px de rien sous la forme d'onde. La
+   hauteur gagnée profite au panneau de mixage, qui montre alors ses six faders
+   sans défilement. */
+/* `width: 100%` n'est pas redondant : sur un élément flex, une marge automatique
+   dans l'axe transverse annule l'étirement et le ramène à la largeur de son
+   contenu. Le lecteur tombait ainsi à 297 px de large. */
+#editorView { min-height: 100%; display: flex; flex-direction: column; }
+#editorView .editor { flex: 1; width: 100%; }
+
 .editor {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 26px;
-  height: 100%;
+  /* Les deux colonnes s'étirent sur la hauteur de la rangée : c'est ce qui
+     donne au panneau de mixage toute la place gagnée. Le lecteur, lui, reste
+     en haut de la sienne par simple flux de bloc. */
+  align-items: stretch;
   max-width: 1500px;
+  /* Centré pour la même raison que la grille : sans cela tout le vide d'un
+     écran large s'accumule à droite du panneau de mixage. */
+  margin-inline: auto;
 }
 
+/* Le lecteur est borné dans les deux sens et dimensionné par son contenu.
+   La hauteur compte autant que la largeur : sur un écran large, une vidéo
+   dimensionnée par sa seule largeur dépassait le bas de la fenêtre et la forme
+   d'onde passait sous la ligne de flottaison.
+
+   `max-width` plutôt que `width` : avec une largeur imposée, le cadre restait
+   plus large que l'image dès que la hauteur devenait la contrainte, et le rayon
+   comme l'ombre encadraient des bandes noires au lieu du clip. Ici la boîte
+   épouse l'image quel que soit le format capturé — 16/9, ultra-large ou
+   vertical. */
 video {
-  width: 100%;
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 268px);
+  margin-inline: auto;
   border-radius: var(--radius);
   background: #000;
   border: 1px solid var(--border);
@@ -934,3 +934,75 @@ input[type="range"]:active::-webkit-slider-thumb { cursor: grabbing; transform: 
 .toast.error { border-color: rgba(255, 92, 106, 0.45); }
 
 .hidden { display: none !important; }
+
+/* ─────────────────────── adaptation aux tailles d'écran ─────────────────────
+   L'application sert autant en fenêtre étroite à côté d'un jeu qu'en plein
+   écran sur un moniteur large.
+
+   ⚠️ **Ce bloc doit rester en fin de fichier.** Une media query n'ajoute aucune
+   spécificité : à sélecteur égal, c'est la règle la plus tardive qui gagne.
+   Placé en tête, comme il l'était, chacune de ses déclarations était écrasée
+   par la définition du composant qui suivait — les quatre paliers ne faisaient
+   donc rigoureusement rien, et l'application ne s'adaptait à aucune taille. */
+
+/* Écran large : la grille respire au lieu de s'étirer, l'éditeur gagne en
+   confort de lecture. */
+@media (min-width: 1600px) {
+  main { padding: 34px 40px 40px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 22px; }
+  .editor { grid-template-columns: minmax(0, 1fr) 400px; gap: 32px; }
+}
+
+/* Plein écran sur un grand moniteur.
+   Les plafonds de 1400 et 1500 px, pensés pour un écran de portable, laissaient
+   plus de 1000 px de vide sur un 2560. On les relève, et les cartes grossissent
+   avec : multiplier les colonnes de 250 px sur un écran large donne une
+   planche-contact, pas une bibliothèque. */
+@media (min-width: 1900px) {
+  main { padding: 40px 56px 48px; }
+  .library-bar, .grid, .editor { max-width: 1840px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 26px; }
+  .editor { grid-template-columns: minmax(0, 1fr) 430px; gap: 38px; }
+}
+
+/* Fenêtre étroite : le panneau de mixage passe sous le lecteur plutôt que de
+   l'écraser. Une colonne de 360 px sur 900 px de large ne laisse plus rien à
+   la vidéo. */
+@media (max-width: 1080px) {
+  .editor { grid-template-columns: 1fr; gap: 18px; height: auto; }
+  .panel { max-height: none; }
+  main { padding: 20px 18px 26px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+  /* Le lecteur n'est plus côte à côte avec le mixeur : lui garder la moitié de
+     la hauteur le rendrait minuscule. */
+  video { max-height: 60vh; }
+}
+
+/* Très étroit : l'en-tête se réorganise pour que les actions restent
+   atteignables sans défilement horizontal. */
+@media (max-width: 760px) {
+  header { flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+  .status { order: 3; width: 100%; }
+  .brand { font-size: 14px; }
+  /* La recherche prend toute la largeur plutôt que d'écraser le tri. */
+  .search { order: 3; width: 100%; }
+  .search input, .search input:focus { width: 100%; }
+  .tabs button { font-size: 11.5px; padding: 8px 2px; }
+}
+
+/* Fenêtre basse — un écran de portable, ou l'application posée sur la moitié
+   haute de l'écran. La réserve verticale du lecteur devient l'essentiel de la
+   hauteur disponible : sans ce palier, il ne reste plus rien pour l'image. */
+@media (max-height: 780px) {
+  video { max-height: calc(100vh - 224px); }
+}
+
+/* Mouvement réduit : on respecte le réglage système. Les transitions restent,
+   ce sont les boucles et les entrées qui disparaissent. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
