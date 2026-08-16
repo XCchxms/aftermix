@@ -392,11 +392,13 @@ footer a:hover { color: var(--text); }
   </p>
 
   <div class="cta">
-    <!-- URL déterministe d'un fichier de release GitHub. Elle n'est valide que
-         si le tag est exactement `v0.1.0` et le fichier nommé
-         `Aftermix_0.1.0_x64-setup.exe` — ce que produit `cargo tauri build`. -->
+    <!-- `releases/latest/download/` vise la dernière release quel que soit son
+         tag. Une URL construite sur le tag avait déjà cassé une fois : la
+         release publiée portait `Aftermix` et non `v0.1.0`, et le bouton
+         renvoyait un 404.
+         ⚠️ Le nom du fichier, lui, reste à mettre à jour à chaque version. -->
     <a class="btn primary" id="download"
-       href="https://github.com/XCchxms/aftermix/releases/download/v0.1.0/Aftermix_0.1.0_x64-setup.exe">
+       href="https://github.com/XCchxms/aftermix/releases/latest/download/Aftermix_0.1.0_x64-setup.exe">
       Télécharger pour Windows
     </a>
     <span class="cta-note">
@@ -759,7 +761,7 @@ footer a:hover { color: var(--text); }
   <div class="shell">
     <h2>Le prochain bon moment mérite un bon son</h2>
     <p>Installe-le maintenant, et il sera prêt la prochaine fois qu'il se passe quelque chose.</p>
-    <a class="btn primary" href="https://github.com/XCchxms/aftermix/releases/download/v0.1.0/Aftermix_0.1.0_x64-setup.exe">Télécharger pour Windows</a>
+    <a class="btn primary" href="https://github.com/XCchxms/aftermix/releases/latest/download/Aftermix_0.1.0_x64-setup.exe">Télécharger pour Windows</a>
   </div>
 </section>
 
