@@ -655,11 +655,15 @@ function captureHotkey() {
   if (button.classList.contains("capturing")) return;
   button.classList.add("capturing");
   el("hotkeyLabel").textContent = "Appuie sur ta combinaison…";
+  // Le raccourci en cours est suspendu : sans cela, le presser pendant la
+  // capture sauvegarderait un clip au lieu de le réassigner.
+  invoke("suspend_hotkey", { suspended: true }).catch(() => {});
 
   const stop = () => {
     button.classList.remove("capturing");
     window.removeEventListener("keydown", onKey, true);
     button.removeEventListener("blur", stop);
+    invoke("suspend_hotkey", { suspended: false }).catch(() => {});
     renderHotkey();
   };
 

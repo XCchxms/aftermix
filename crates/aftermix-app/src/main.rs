@@ -375,6 +375,22 @@ fn apply_hotkey(app: &AppHandle, combination: &str) -> HotkeyStatus {
     status
 }
 
+/// Suspend le raccourci global le temps d'en choisir un autre.
+///
+/// Sans cela, presser la combinaison en cours pendant la capture déclenche une
+/// sauvegarde au lieu de réassigner la touche : on part réassigner son
+/// raccourci et l'on se retrouve avec un clip. Le raccourci est remis en place
+/// à la fin de la capture, que l'utilisateur ait validé ou annulé.
+#[tauri::command]
+fn suspend_hotkey(app: AppHandle, state: State<'_, AppState>, suspended: bool) {
+    if suspended {
+        let _ = app.global_shortcut().unregister_all();
+    } else {
+        let combination = state.settings.lock().unwrap().hotkey.clone();
+        apply_hotkey(&app, &combination);
+    }
+}
+
 #[tauri::command]
 fn hotkey_status(state: State<'_, AppState>) -> HotkeyStatus {
     state.hotkey.lock().unwrap().clone()
@@ -1006,6 +1022,7 @@ fn main() {
             current_tracks,
             recorder_health,
             hotkey_status,
+            suspend_hotkey,
             voice_status,
             save_clip,
             export_mix,
