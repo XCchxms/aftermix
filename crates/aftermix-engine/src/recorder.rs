@@ -818,6 +818,10 @@ fn save_now(
         tracks: labels.to_vec(),
         seconds,
         created: crate::library::now_seconds(),
+        // Attribué dès la sauvegarde plutôt qu'au premier partage : un
+        // identifiant qui apparaît après coup obligerait à réécrire le sidecar
+        // d'un clip qu'on est peut-être en train de lire.
+        share_id: Some(crate::library::new_share_id()),
     };
     if let Err(e) = meta.write(path) {
         tracing::warn!("métadonnées non écrites : {e:#}");

@@ -87,6 +87,7 @@ les cartes sur un écran large.
 | **Interrupteur** (`.switch`) | l'état se lit de loin, là où la case à cocher grise de Windows est le détail qui fait « boîte de dialogue système » |
 | **Ligne de réglage** (`.field`) | le nom, ce qu'il fait, puis le contrôle. Un réglage qu'on ne comprend pas ne sera jamais touché |
 | **Encadré** (`.callout`) | explique une conséquence plutôt qu'un réglage ; se distingue du texte d'aide sans crier |
+| **Capture de touche** (`.capture`) | un raccourci se presse, il ne s'épelle pas — écrire « Ctrl+Shift+X » supposait de connaître l'orthographe exacte, et la moindre faute produisait un raccourci refusé |
 | **Onglets** (`.tabs`) | onze réglages empilés se parcourent mal — on cherche au lieu de trouver |
 
 **Les icônes sont des tracés vectoriels, jamais des glyphes de police.** Un `⚙`
@@ -132,6 +133,27 @@ Corrigé, à ne pas réintroduire :
   écoute indisponible, micro débranché, piste sans son, buffer figé, plafond
   disque qui tronque le buffer. Un diagnostic invisible a déjà tué trois
   fonctionnalités sans que personne ne le sache.
+- **Une fonction qui fait semblant.** Le partage affiche l'adresse d'un clip et
+  dit dans le même encadré que rien ne la résout encore. Un bouton « Copier »
+  qui rend un lien mort sans prévenir est pire que pas de bouton du tout.
+
+## Trois états pour une piste, pas deux
+
+| | |
+|---|---|
+| **aucun son** | crête sous 0,001 — l'application était ouverte et n'a rien joué, ou le micro n'a capté que son bruit de fond |
+| **son très faible** | crête entre 0,001 et 0,012 — il y a du signal, mais on ne l'entendra pas |
+| normal | au-delà |
+
+La bande du milieu manquait, et c'était un vrai défaut : des pistes à 0,002 ou
+0,004 de crête — du son réel, simplement enregistré très bas — étaient annoncées
+« aucun son ». L'utilisateur cherchait une panne là où il n'y en avait pas, et
+passait à côté du fader qu'il fallait justement remonter. C'est le cas d'usage
+central du produit : le dire vaut mieux que le taire.
+
+Seuils calés sur des mesures réelles, pas choisis à vue : une application
+silencieuse rend des zéros **exacts**, un micro branché mais muet plafonne vers
+0,00015.
 
 ## Identité des clips
 

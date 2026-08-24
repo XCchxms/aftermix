@@ -479,6 +479,46 @@ fn backfill_thumbnails(app: AppHandle, state: State<'_, AppState>) {
     });
 }
 
+/// Racine des adresses de partage.
+///
+/// ⚠️ **Aucun hébergement n'est branché derrière.** L'adresse est construite et
+/// mémorisée, mais rien ne la résout encore : l'interface le dit explicitement
+/// plutôt que d'offrir un lien mort. L'identifiant, lui, est définitif — c'est
+/// justement ce qui permet de brancher l'hébergement plus tard sans invalider
+/// les adresses déjà distribuées.
+const SHARE_BASE: &str = "https://aftermix.link/c/";
+
+#[derive(Serialize)]
+struct ShareView {
+    id: String,
+    url: String,
+    /// Vrai quand l'adresse mène réellement quelque part. Faux aujourd'hui.
+    hosted: bool,
+}
+
+/// Rend l'adresse de partage d'un clip, en la créant si elle manque.
+///
+/// L'identifiant est écrit dans le sidecar : il doit survivre au redémarrage,
+/// sans quoi un lien distribué hier désignerait un autre clip demain.
+#[tauri::command]
+fn share_link(path: String) -> Result<ShareView, String> {
+    let clip = PathBuf::from(&path);
+    let mut meta = library::ClipMeta::read(&clip)
+        .ok_or("ce clip n'a pas de métadonnées : son adresse ne peut pas être retenue")?;
+
+    if meta.share_id.is_none() {
+        meta.share_id = Some(library::new_share_id());
+        meta.write(&clip).map_err(|e| format!("{e:#}"))?;
+    }
+    let id = meta.share_id.unwrap_or_default();
+
+    Ok(ShareView {
+        url: format!("{SHARE_BASE}{id}"),
+        id,
+        hosted: false,
+    })
+}
+
 #[tauri::command]
 fn delete_clip(path: String) -> Result<(), String> {
     library::delete(&PathBuf::from(path)).map_err(|e| e.to_string())
@@ -958,6 +998,7 @@ fn main() {
             list_microphones,
             list_clips,
             backfill_thumbnails,
+            share_link,
             delete_clip,
             is_recording,
             start_recording,

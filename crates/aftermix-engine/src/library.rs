@@ -23,6 +23,43 @@ pub struct ClipMeta {
     pub seconds: f64,
     /// Date de création, en secondes depuis l'époque Unix.
     pub created: u64,
+    /// Identifiant public du clip, tel qu'il apparaît dans une adresse de
+    /// partage. Absent des clips antérieurs à cette fonction, attribué à la
+    /// première demande.
+    #[serde(default)]
+    pub share_id: Option<String>,
+}
+
+/// Alphabet des identifiants de partage.
+///
+/// Base 32 sans `I`, `L`, `O` ni `U` : les trois premières se confondent à la
+/// lecture avec `1` et `0`, la dernière sert surtout à former des mots qu'on
+/// préfère ne pas voir apparaître par hasard dans une adresse.
+const ID_ALPHABET: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/// Fabrique un identifiant de partage.
+///
+/// Huit caractères, soit quarante bits : de quoi rendre une adresse
+/// impossible à deviner par tâtonnement, tout en restant dictable au
+/// téléphone. La graine vient de `RandomState`, que la bibliothèque standard
+/// initialise depuis le système — inutile d'ajouter une dépendance de tirage
+/// aléatoire pour huit caractères.
+pub fn new_share_id() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_u64(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0),
+    );
+    let mut value = hasher.finish();
+    let mut id = String::with_capacity(8);
+    for _ in 0..8 {
+        id.push(ID_ALPHABET[(value % 32) as usize] as char);
+        value /= 32;
+    }
+    id
 }
 
 impl ClipMeta {
@@ -112,6 +149,7 @@ pub fn describe(path: &Path) -> Result<Clip> {
         tracks: Vec::new(),
         seconds: 0.0,
         created: fallback_created,
+        share_id: None,
     });
 
     let thumbnail = ClipMeta::thumbnail_path(path);
@@ -191,6 +229,7 @@ mod tests {
             tracks: vec!["Jeu".into(), "Discord".into(), "Micro".into()],
             seconds: 42.5,
             created: 1_700_000_000,
+            share_id: None,
         };
         let clip = make_clip(&dir.0, "avec_meta", Some(meta));
 
@@ -224,6 +263,7 @@ mod tests {
                     tracks: vec![],
                     seconds: 1.0,
                     created,
+                    share_id: None,
                 }),
             );
         }
@@ -241,6 +281,7 @@ mod tests {
                 tracks: vec!["Jeu".into()],
                 seconds: 1.0,
                 created: 1,
+                share_id: None,
             }),
         );
         let sidecar = ClipMeta::sidecar_path(&clip);
@@ -249,6 +290,60 @@ mod tests {
         delete(&clip).unwrap();
         assert!(!clip.exists());
         assert!(!sidecar.exists());
+    }
+
+    #[test]
+    fn un_identifiant_de_partage_est_court_et_lisible() {
+        let id = new_share_id();
+        assert_eq!(id.len(), 8);
+        // Aucun caractere qui se confonde a la lecture ou au telephone.
+        for c in id.chars() {
+            assert!(ID_ALPHABET.contains(&(c as u8)), "caractere inattendu : {c}");
+        }
+    }
+
+    #[test]
+    fn deux_identifiants_de_partage_different() {
+        // Une collision rendrait deux clips indiscernables derriere la meme
+        // adresse : c'est la seule propriete qui compte vraiment ici.
+        let ids: std::collections::HashSet<String> = (0..500).map(|_| new_share_id()).collect();
+        assert_eq!(ids.len(), 500);
+    }
+
+    #[test]
+    fn l_identifiant_survit_a_l_aller_retour() {
+        let dir = TempDir::new("partage");
+        let clip = make_clip(
+            &dir.0,
+            "avec_id",
+            Some(ClipMeta {
+                tracks: vec!["Jeu".into()],
+                seconds: 1.0,
+                created: 1,
+                share_id: Some("K7M2XQ4B".into()),
+            }),
+        );
+        // Une adresse deja distribuee doit designer le meme clip demain.
+        assert_eq!(ClipMeta::read(&clip).unwrap().share_id.as_deref(), Some("K7M2XQ4B"));
+    }
+
+    #[test]
+    fn un_ancien_sidecar_sans_identifiant_reste_lisible() {
+        // Les clips anterieurs a cette fonction n'ont pas le champ : leur
+        // sidecar doit continuer de se lire, sinon toute la bibliotheque
+        // disparaitrait a la mise a jour.
+        let dir = TempDir::new("ancien");
+        let clip = dir.0.join("ancien.mp4");
+        std::fs::write(&clip, b"pas un vrai mp4").unwrap();
+        std::fs::write(
+            ClipMeta::sidecar_path(&clip),
+            br#"{"tracks":["Jeu"],"seconds":12.0,"created":1700000000}"#,
+        )
+        .unwrap();
+
+        let described = describe(&clip).unwrap();
+        assert_eq!(described.tracks, ["Jeu"]);
+        assert!(ClipMeta::read(&clip).unwrap().share_id.is_none());
     }
 
     #[test]

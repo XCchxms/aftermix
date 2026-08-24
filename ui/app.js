@@ -246,16 +246,24 @@ async function openEditor(clip) {
     if (tracks.length === 0) throw new Error("aucune piste exploitable dans ce clip");
     await preview.load(tracks, convertFileSrc);
     for (const [index, gain] of state.gains) preview.setGain(index, gain);
-    // Une piste vide n'est pas une panne : l'application était ouverte mais ne
-    // jouait rien. Le dire évite de chercher un défaut là où il n'y en a pas.
+    // Trois états, pas deux. Une piste vide n'est pas une panne : l'application
+    // était ouverte mais ne jouait rien. Une piste très faible n'est pas vide
+    // non plus — c'est exactement le micro trop bas que le produit sert à
+    // rattraper, et l'annoncer « aucun son » envoyait chercher une panne
+    // inexistante au lieu de désigner le fader à remonter.
     const silent = new Set(preview.silentTracks());
+    const faint = new Set(preview.faintTracks());
     for (const [index, row] of trackRows) {
       if (silent.has(index)) markSilent(row);
+      else if (faint.has(index)) markFaint(row);
     }
     const audible = tracks.length - silent.size;
+    const details = [];
+    if (silent.size > 0) details.push(`${silent.size} silencieuse(s)`);
+    if (faint.size > 0) details.push(`${faint.size} très faible(s)`);
     el("previewState").textContent =
-      silent.size > 0
-        ? `Écoute en direct — ${audible} piste(s) avec du son, ${silent.size} silencieuse(s)`
+      details.length > 0
+        ? `Écoute en direct — ${audible} piste(s) avec du son, ${details.join(", ")}`
         : `Écoute en direct sur ${tracks.length} piste(s) — bouge un fader pendant la lecture`;
     el("previewState").classList.remove("warn");
 
@@ -304,6 +312,12 @@ function markSilent(row) {
   row.classList.add("silent");
   const value = row.querySelector(".value");
   if (value) value.textContent = "aucun son";
+}
+
+/// Signale qu'une piste contient du signal, mais trop bas pour s'entendre.
+function markFaint(row) {
+  row.classList.add("faint");
+  row.title = "Du son est bien présent, mais très bas — remonte ce fader.";
 }
 
 function buildTrack(track) {
@@ -451,6 +465,45 @@ async function exportMix() {
   }
 }
 
+// ──────────────────────────────── partage ─────────────────────────────────
+
+/// Ouvre la boîte de partage et affiche l'adresse du clip.
+///
+/// L'adresse est demandée au moteur, qui la crée et l'écrit dans le sidecar si
+/// elle manque. Elle est donc définitive dès le premier affichage : c'est ce qui
+/// permettra de brancher un hébergement plus tard sans invalider une adresse
+/// déjà donnée à quelqu'un.
+async function openShare() {
+  if (!state.clip) return;
+  const share = await call("share_link", { path: state.clip.path });
+  el("shareUrl").value = share.url;
+
+  // Tant que rien ne résout l'adresse, on le dit. Un bouton « Copier » qui rend
+  // un lien mort sans prévenir est pire que pas de bouton du tout.
+  const state_ = el("shareState");
+  state_.classList.toggle("warn", !share.hosted);
+  state_.hidden = share.hosted;
+
+  el("sharePanel").classList.remove("hidden");
+  el("shareUrl").focus();
+  el("shareUrl").select();
+}
+
+async function copyShare() {
+  const button = el("shareCopy");
+  try {
+    await navigator.clipboard.writeText(el("shareUrl").value);
+  } catch {
+    // Le presse-papier peut être refusé selon le contexte : la sélection reste
+    // un repli utilisable au clavier.
+    el("shareUrl").select();
+    document.execCommand?.("copy");
+  }
+  const previous = button.textContent;
+  button.textContent = "Copié";
+  setTimeout(() => { button.textContent = previous; }, 1400);
+}
+
 async function deleteClip() {
   await call("delete_clip", { path: state.clip.path });
   toast("Clip supprimé");
@@ -480,6 +533,7 @@ async function closeEditor() {
 
 let draftBuffer = 60;
 let draftQuality = "haute";
+let draftHotkey = "Ctrl+Shift+X";
 /// Élément qui avait le focus avant l'ouverture, pour le lui rendre en sortant.
 let focusBeforeSettings = null;
 
@@ -488,7 +542,8 @@ async function openSettings() {
   draftBuffer = settings.buffer_seconds;
   draftQuality = settings.quality ?? "haute";
   el("outputDir").value = settings.output_dir;
-  el("hotkey").value = settings.hotkey;
+  draftHotkey = settings.hotkey;
+  renderHotkey();
   el("voicePhrase").value = settings.voice_phrase ?? "";
   el("autoStart").checked = settings.auto_start ?? true;
   el("launchAtLogin").checked = settings.launch_at_login ?? false;
@@ -569,6 +624,81 @@ async function renderMicrophones(selected) {
   } else {
     note.textContent = `${devices.length} micro(s) détecté(s).`;
     note.classList.remove("warn");
+  }
+}
+
+/// Traduit une touche du clavier vers la syntaxe attendue par Windows.
+///
+/// On part de `code` et non de `key` : `key` dépend de la disposition — sur un
+/// clavier AZERTY, la touche marquée A renvoie « q » en QWERTY sous-jacent, et
+/// le raccourci enregistré ne correspondrait plus à la touche pressée.
+function keyName(code) {
+  const letter = /^Key([A-Z])$/.exec(code);
+  if (letter) return letter[1];
+  const digit = /^Digit(\d)$/.exec(code);
+  if (digit) return digit[1];
+  if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
+  // Quelques touches sûres au-delà des lettres et des chiffres. La liste reste
+  // courte volontairement : Windows refuse une combinaison qu'il ne comprend
+  // pas, et il vaut mieux le dire à la saisie qu'après coup.
+  return { Space: "Space", Insert: "Insert", Home: "Home", End: "End",
+           PageUp: "PageUp", PageDown: "PageDown", Backquote: "`" }[code] ?? null;
+}
+
+/// Passe le champ en écoute et compose la combinaison à la volée.
+///
+/// Saisir « Ctrl+Shift+X » à la main supposait de connaître l'orthographe
+/// exacte attendue, et la moindre faute produisait un raccourci refusé sans
+/// qu'on sache pourquoi. Appuyer sur les touches supprime la question.
+function captureHotkey() {
+  const button = el("hotkey");
+  if (button.classList.contains("capturing")) return;
+  button.classList.add("capturing");
+  el("hotkeyLabel").textContent = "Appuie sur ta combinaison…";
+
+  const stop = () => {
+    button.classList.remove("capturing");
+    window.removeEventListener("keydown", onKey, true);
+    button.removeEventListener("blur", stop);
+    renderHotkey();
+  };
+
+  const onKey = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.code === "Escape") return stop();
+
+    const name = keyName(event.code);
+    // Tant qu'aucune touche principale n'est pressée, on montre les modificateurs
+    // seuls : l'utilisateur voit que l'écoute fonctionne avant d'avoir fini.
+    const parts = [];
+    if (event.ctrlKey) parts.push("Ctrl");
+    if (event.altKey) parts.push("Alt");
+    if (event.shiftKey) parts.push("Shift");
+    if (event.metaKey) parts.push("Super");
+    if (!name) {
+      el("hotkeyLabel").textContent = parts.length
+        ? parts.join("+") + "+…"
+        : "Appuie sur ta combinaison…";
+      return;
+    }
+    parts.push(name);
+    draftHotkey = parts.join("+");
+    stop();
+  };
+
+  window.addEventListener("keydown", onKey, true);
+  button.addEventListener("blur", stop, { once: true });
+}
+
+/// Affiche la combinaison retenue, touche par touche.
+function renderHotkey() {
+  const label = el("hotkeyLabel");
+  label.textContent = "";
+  for (const part of draftHotkey.split("+")) {
+    const key = document.createElement("kbd");
+    key.textContent = part;
+    label.appendChild(key);
   }
 }
 
@@ -670,7 +800,7 @@ async function saveSettings() {
     settings: {
       buffer_seconds: draftBuffer,
       output_dir: el("outputDir").value.trim(),
-      hotkey: el("hotkey").value.trim() || "Ctrl+Shift+X",
+      hotkey: draftHotkey,
       voice_phrase: el("voicePhrase").value.trim(),
       auto_start: el("autoStart").checked,
       launch_at_login: el("launchAtLogin").checked,
@@ -717,6 +847,15 @@ el("back").onclick = closeEditor;
 el("autoMix").onclick = applyAutoMix;
 el("export").onclick = exportMix;
 el("delete").onclick = deleteClip;
+el("share").onclick = openShare;
+el("shareCopy").onclick = copyShare;
+el("shareClose").onclick = () => el("sharePanel").classList.add("hidden");
+el("shareReveal").onclick = () => {
+  if (state.clip) invoke("reveal", { path: state.clip.path }).catch(() => {});
+};
+el("sharePanel").onclick = (event) => {
+  if (event.target === el("sharePanel")) el("sharePanel").classList.add("hidden");
+};
 
 // ── écoute en direct, calée sur le lecteur ──
 preview = new Preview(el("player"));
@@ -779,6 +918,7 @@ for (const button of el("qualityChoices").children) {
   button.onclick = () => { draftQuality = button.dataset.quality; renderChoices(); };
 }
 el("diskCap").oninput = renderDiskCap;
+el("hotkey").onclick = captureHotkey;
 
 // Onglets : clic, et flèches gauche/droite comme l'attend un lecteur d'écran.
 const tabButtons = [...el("settingsPanel").querySelectorAll('[role="tab"]')];
@@ -800,6 +940,8 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!el("settingsPanel").classList.contains("hidden")) {
     closeSettings();
+  } else if (!el("sharePanel").classList.contains("hidden")) {
+    el("sharePanel").classList.add("hidden");
   } else if (!el("editorView").classList.contains("hidden")) {
     closeEditor();
   }

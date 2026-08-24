@@ -99,6 +99,7 @@
               </button>
               <div style="margin-top:8px; display:flex; gap:8px">
                 <button class="btn primary" id="export" style="flex:1">Exporter</button>
+                <button class="btn" id="share">Partager</button>
                 <button class="btn danger" id="delete">Supprimer</button>
               </div>
             </div>
@@ -190,7 +191,10 @@
           <div class="field block">
             <span class="field-name"><label for="hotkey">Raccourci de sauvegarde</label></span>
             <span class="field-note">Fonctionne fenêtre fermée, pendant une partie.</span>
-            <input type="text" id="hotkey" spellcheck="false" placeholder="Ctrl+Shift+X" />
+            <button type="button" class="capture" id="hotkey" aria-describedby="hotkeyState">
+              <span id="hotkeyLabel">Ctrl+Shift+X</span>
+              <span class="capture-hint">modifier</span>
+            </button>
             <div class="hint" id="hotkeyState"></div>
           </div>
 
@@ -254,6 +258,35 @@
       <div class="dialog-actions">
         <button class="btn ghost" id="settingsCancel">Annuler</button>
         <button class="btn primary" id="settingsSave">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="sharePanel">
+    <div class="dialog narrow" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+      <div class="dialog-head">
+        <h2 id="shareTitle">Partager ce clip</h2>
+        <p>Chaque clip porte une adresse qui lui est propre et ne change plus.</p>
+      </div>
+
+      <div class="field block">
+        <span class="field-name"><label for="shareUrl">Adresse du clip</label></span>
+        <div class="copy-row">
+          <input type="text" id="shareUrl" readonly spellcheck="false" />
+          <button class="btn" id="shareCopy">Copier</button>
+        </div>
+      </div>
+
+      <div class="callout warn" id="shareState">
+        <b>L'hébergement n'est pas encore en place.</b>
+        Cette adresse est réservée à ce clip et le restera, mais rien ne la
+        résout pour l'instant : la donner à quelqu'un ne lui montrera rien.
+        En attendant, envoie le fichier — le bouton ci-dessous ouvre son dossier.
+      </div>
+
+      <div class="dialog-actions">
+        <button class="btn ghost" id="shareReveal">Ouvrir le dossier</button>
+        <button class="btn primary" id="shareClose">Fermer</button>
       </div>
     </div>
   </div>

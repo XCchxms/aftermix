@@ -109,7 +109,15 @@ Aucun de ces points n'empêche l'usage quotidien.
    un thread à file bornée — **sans jamais toucher au rythme de la boucle**.
 4. **Plein écran exclusif**, **sortie de veille**, **NVIDIA / Intel** — non
    testés. Les MFT diffèrent nettement entre constructeurs.
-5. **Marqueur rétroactif** — idée retenue, non commencée. Poser un repère
+5. **Hébergement des liens de partage** — chaque clip porte désormais un
+   identifiant définitif, écrit dans son sidecar, et l'interface affiche
+   l'adresse correspondante. **Rien ne la résout** : il manque le stockage, la
+   page lecteur et ses balises Open Graph pour l'aperçu dans Discord. La piste
+   la moins coûteuse est Cloudflare R2 — 10 Go gratuits et surtout **zéro frais
+   de sortie**, ce qui rend l'idée viable là où S3 la rendrait absurde — avec un
+   Worker pour l'envoi et la lecture. À garder réservé à un seul émetteur : dès
+   que n'importe qui peut déposer, il faut de la modération.
+6. **Marqueur rétroactif** — idée retenue, non commencée. Poser un repère
    pendant la partie sans rien enregistrer, puis extraire les moments marqués en
    fin de session. Le buffer contient déjà tout.
 
@@ -195,6 +203,8 @@ Chacune a coûté une session de diagnostic. Le détail est dans le README, sect
 | Audio et vidéo **entrelacés** à l'écriture | le muxeur bloque si un flux prend trop d'avance |
 | Media Foundation démarré **au lancement de l'application** | sinon `MF_E_SHUTDOWN` dès qu'on ouvre un clip sans avoir démarré le buffer |
 | **Une seule instance** | deux applications, ce sont deux buffers capturant le même écran |
+| Identifiant de partage attribué **à la sauvegarde**, pas au premier partage | un identifiant tardif obligerait à réécrire le sidecar d'un clip peut-être en cours de lecture |
+| Crête audio mesurée **sur tous les canaux**, pas seulement le gauche | une source calée à droite passait pour muette, et l'échantillonnage grossier sous-estimait la crête d'un facteur 6,6 |
 | Emplacement du micro **réservé même micro coupé** | le libérer aux applications changerait la structure des flux d'une session à l'autre, et rebrancher un micro exigerait de vider le buffer |
 | Micro mémorisé par **identifiant**, pas par nom | un pilote renomme son périphérique à chaque mise à jour, et le réglage serait perdu |
 | Énumération des micros sur **son propre thread MTA** | l'appelant est le thread de l'interface, dont le modèle COM appartient au webview |

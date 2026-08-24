@@ -18,7 +18,21 @@
 const RESYNC_THRESHOLD = 0.12;
 
 /// En dessous de ce niveau, une piste est considérée comme muette.
-const SILENCE_PEAK = 0.005;
+/// En dessous de cette crête, une piste ne contient rien d'exploitable.
+///
+/// Mesuré sur des clips réels : une application ouverte qui n'a rien joué rend
+/// des zéros **exacts**, un micro branché mais muet plafonne vers 0,00015. Le
+/// seuil sépare ces deux cas de tout le reste.
+const SILENCE_PEAK = 0.001;
+
+/// En dessous de cette crête, il y a du signal mais il est presque inaudible.
+///
+/// Cette bande manquait, et c'était un vrai défaut : des pistes à 0,002 ou
+/// 0,004 de crête — du son réel, simplement enregistré très bas — étaient
+/// annoncées « aucun son ». L'utilisateur cherchait une panne là où il n'y en
+/// avait pas, et passait à côté du fader qu'il fallait justement remonter.
+/// C'est le cas d'usage central du produit : le dire vaut mieux que le taire.
+const FAINT_PEAK = 0.012;
 
 /// Au-delà de cette corrélation, deux pistes portent le même son.
 ///
@@ -56,12 +70,14 @@ function correlation(first, second) {
 /// alors que la piste reste discrète. C'est la moyenne quadratique qui
 /// correspond à ce qu'on entend, donc à ce qu'il faut équilibrer.
 function loudnessOf(buffer) {
-  const data = buffer.getChannelData(0);
   let sum = 0;
   let count = 0;
-  for (let i = 0; i < data.length; i += 256) {
-    sum += data[i] * data[i];
-    count++;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+    const data = buffer.getChannelData(channel);
+    for (let i = 0; i < data.length; i += 64) {
+      sum += data[i] * data[i];
+      count++;
+    }
   }
   return count > 0 ? Math.sqrt(sum / count) : 0;
 }
@@ -70,14 +86,20 @@ function loudnessOf(buffer) {
 ///
 /// Sert à repérer les pistes vides : une application ouverte mais silencieuse
 /// produit un flux complet de zéros, indiscernable d'une capture ratée tant
-/// qu'on ne regarde pas le signal. Un pas large suffit — on cherche à savoir
-/// s'il se passe quelque chose, pas à mesurer précisément.
+/// qu'on ne regarde pas le signal.
+///
+/// **Tous les canaux, et un pas serré.** Le pas de 512 sur le seul canal gauche
+/// qui précédait sous-estimait la crête d'un facteur allant jusqu'à 6,6 sur des
+/// clips réels — 0,11 relevé contre 0,73 réel sur une piste de micro. Une
+/// source calée à droite pouvait par ailleurs passer pour muette.
 function peakOf(buffer) {
-  const data = buffer.getChannelData(0);
   let peak = 0;
-  for (let i = 0; i < data.length; i += 512) {
-    const value = Math.abs(data[i]);
-    if (value > peak) peak = value;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+    const data = buffer.getChannelData(channel);
+    for (let i = 0; i < data.length; i += 32) {
+      const value = Math.abs(data[i]);
+      if (value > peak) peak = value;
+    }
   }
   return peak;
 }
@@ -221,6 +243,17 @@ export class Preview {
   silentTracks() {
     return [...this.tracks.entries()]
       .filter(([, track]) => track.peak < SILENCE_PEAK)
+      .map(([index]) => index);
+  }
+
+  /// Pistes qui portent du signal, mais si bas qu'on ne l'entendra pas.
+  ///
+  /// Distinguer ce cas du silence complet est tout l'intérêt : « aucun son »
+  /// envoie chercher une panne, « son très faible » désigne le fader à
+  /// remonter — et c'est précisément ce que le produit sert à faire.
+  faintTracks() {
+    return [...this.tracks.entries()]
+      .filter(([, track]) => track.peak >= SILENCE_PEAK && track.peak < FAINT_PEAK)
       .map(([index]) => index);
   }
 
